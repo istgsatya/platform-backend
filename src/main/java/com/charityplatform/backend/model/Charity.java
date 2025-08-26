@@ -41,7 +41,7 @@ public class Charity {
 
     private Instant updatedAt;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @OneToOne(mappedBy ="charity")
     private User adminUser;
 
     @PrePersist

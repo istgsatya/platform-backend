@@ -13,6 +13,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.fasterxml.jackson.databind.ObjectMapper; // Add this import
+import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/charities")
@@ -26,8 +28,8 @@ public class CharityController {
 
         }
         @PostMapping(value= "/apply",consumes = {"multipart/form-data"})
-        @PreAuthorize("hasAuthority('ROLE_DONONR')")
-    public ResponseEntity<?> applyForCharityVerification(
+        @PreAuthorize("hasAuthority('ROLE_DONOR')")
+        public ResponseEntity<?> applyForCharityVerification(
 
             @RequestPart("application") CharityApplicationRequest request,
             @RequestPart("document") MultipartFile document,

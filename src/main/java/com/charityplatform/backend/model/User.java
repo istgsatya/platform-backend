@@ -1,45 +1,38 @@
+// src/main/java/com/charityplatform/backend/model/User.java
 package com.charityplatform.backend.model;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
-import java.io.Serializable;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.validator.constraints.br.CPF;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.GrantedAuthority;
 
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import com.fasterxml.jackson.annotation.JsonManagedReference;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.FetchType;
-
-
 
 @Slf4j
 @Entity
 @Table(name="users",
-uniqueConstraints = {
-        @UniqueConstraint(columnNames="username"),
-        @UniqueConstraint(columnNames = "email")
-})
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames="username"),
+                @UniqueConstraint(columnNames = "email")
+        })
 public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-/// //for uesrnmae part
+
     @NotBlank(message="aint no way username gon be blank ")
     @Size(min=3,max=32,message="you got some weird name(username should be min 3 max 50 chars)")
     @Column(nullable = false,unique = true)
     private String username;
-    /// //for email part
 
     @NotBlank(message = "Email cannot be blank")
     @Size(max = 100, message = "Email cannot exceed 100 characters")
@@ -60,16 +53,20 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private Set<Role> roles = new HashSet<>();
 
-    @OneToOne(mappedBy = "adminUser",cascade =CascadeType.ALL,fetch=FetchType.LAZY)
+    // --- THIS IS THE CORRECTED MAPPING ---
+    // It is mapped by the field named "user" in the VerificationToken class.
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonManagedReference
     private VerificationToken verificationToken;
+    // --- END OF CORRECTION ---
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "charity_id",referencedColumnName = "id")
+    @JoinColumn(name = "charity_id") // No referencedColumnName needed, 'id' is default
     @JsonIgnore
     private Charity charity;
 
     public User() {}
+
     public User(String username, String email, String password) {
         this.username = username;
         this.email = email;
@@ -77,96 +74,39 @@ public class User implements UserDetails {
         this.emailVerified=false;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
+    // --- ALL GETTERS AND SETTERS ---
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
     @Override
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public void setPassword(String password) { this.password = password; }
     @Override
-    public String getPassword() {
-        return password;
-    }
+    public String getPassword() { return password; }
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
+    public Set<Role> getRoles() { return roles; }
+    public void setRoles(Set<Role> roles) { this.roles = roles; }
+    public VerificationToken getVerificationToken() { return verificationToken; }
+    public void setVerificationToken(VerificationToken verificationToken) { this.verificationToken = verificationToken; }
+    public Charity getCharity() { return charity; }
+    public void setCharity(Charity charity) { this.charity = charity; }
 
-
-    public boolean isEmailVerified() {
-        return emailVerified;
-    }
-
-    public void setEmailVerified(boolean emailVerified) {
-        this.emailVerified = emailVerified;
-    }
-    public Set<Role> getRoles() {
-        return roles;
-    }
-
-    public void setRoles(Set<Role> roles) {
-        this.roles = roles;
-    }
-
-    public VerificationToken getVerificationToken() {
-        return verificationToken;
-    }
-
-    public void setVerificationToken(VerificationToken verificationToken) {
-        this.verificationToken = verificationToken;
-    }
-
+    // --- ALL UserDetails METHODS ---
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-///return List.of();
         return roles.stream()
                 .map(role -> new SimpleGrantedAuthority(role.name()))
                 .collect(Collectors.toList());
-
-
     }
     @Override
-    public boolean isAccountNonExpired() {
-        return true;
-
-    }
+    public boolean isAccountNonExpired() { return true; }
     @Override
-    public boolean isAccountNonLocked() {
-        return true;
-    }
+    public boolean isAccountNonLocked() { return true; }
     @Override
-    public boolean isCredentialsNonExpired() {
-
-        return true;
-    }
+    public boolean isCredentialsNonExpired() { return true; }
     @Override
-    public boolean isEnabled() {
-        //temp change // // return true;
-       return this.emailVerified;
-    }
-
-    public Charity getCharity() {
-        return charity;
-    }
-
-    public void setCharity(Charity charity) {
-        this.charity = charity;
-    }
+    public boolean isEnabled() { return this.emailVerified; }
 }
