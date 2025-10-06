@@ -54,6 +54,7 @@ public class CharityService {
         return savedCharity;
 
     }
+    @Transactional(readOnly = true)
     public List<Charity> getCharitiesByStatus(VerificationStatus status) {
        if(status==null){
            return charityRepository.findAll();
