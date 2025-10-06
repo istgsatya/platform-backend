@@ -6,6 +6,7 @@ import com.charityplatform.backend.model.Charity;
 import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.repository.UserRepository;
 import com.charityplatform.backend.repository.CharityRepository;
+import org.apache.tomcat.util.digester.SetPropertiesRule;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.SchedulingAwareRunnable;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,9 @@ import com.charityplatform.backend.model.Role;
 import com.charityplatform.backend.model.VerificationStatus;
 import java.util.List;
 import java.util.Set;
+
+import java.util.stream.Collectors;
+import com.charityplatform.backend.dto.CharityResponseDTO;
 
 @Service
 
@@ -91,7 +95,24 @@ public class CharityService {
         charity.setStatus(VerificationStatus.REJECTED);
         return charityRepository.save(charity);
     }
+    @Transactional(readOnly = true)
+    public List<CharityResponseDTO> getApprovedCharities(){
+        List<Charity> charities=charityRepository.findByStatus(VerificationStatus.APPROVED);
 
+        return charities.stream()
+                .map(CharityResponseDTO::fromCharity)
+                .collect(Collectors.toList());
+    }
 
+    @Transactional(readOnly = true)
+    public CharityResponseDTO getApproveCharityById(Long id) {
+        Charity charity = charityRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Charity not found with id: " + id));
 
+        if (charity.getStatus() != VerificationStatus.APPROVED) {
+            throw new RuntimeException("Charity not found or not approved.");
+        }
+        return CharityResponseDTO.fromCharity(charity);
+
+    }
 }

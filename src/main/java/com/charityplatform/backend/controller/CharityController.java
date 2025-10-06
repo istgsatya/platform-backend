@@ -1,6 +1,7 @@
 // PASTE THIS ENTIRE FILE CONTENT into CharityController.java
 
 package com.charityplatform.backend.controller;
+import com.charityplatform.backend.dto.CharityResponseDTO;
 
 import com.charityplatform.backend.dto.CharityApplicationRequest;
 import com.charityplatform.backend.dto.MessageResponse;
@@ -9,6 +10,7 @@ import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.model.VerificationStatus;
 import com.charityplatform.backend.service.CharityService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -61,4 +63,17 @@ public class CharityController {
         Charity rejectedCharity = charityService.rejectCharity(id);
         return ResponseEntity.ok(rejectedCharity);
     }
+
+    @GetMapping("/approved")
+    public ResponseEntity<CharityResponseDTO> getPublicCharityProfile(@PathVariable Long id){
+        try{
+            return ResponseEntity.ok(charityService.getApproveCharityById(id));
+        }
+        catch(RuntimeException e){
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+
+
 }
