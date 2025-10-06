@@ -1,21 +1,20 @@
-// PASTE THIS ENTIRE FILE CONTENT into CharityController.java
-
+// FINAL CharityController.java
 package com.charityplatform.backend.controller;
-import com.charityplatform.backend.dto.CharityResponseDTO;
 
 import com.charityplatform.backend.dto.CharityApplicationRequest;
+import com.charityplatform.backend.dto.CharityResponseDTO;
 import com.charityplatform.backend.dto.MessageResponse;
 import com.charityplatform.backend.model.Charity;
 import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.model.VerificationStatus;
 import com.charityplatform.backend.service.CharityService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
 import java.util.List;
 
 @RestController
@@ -29,51 +28,45 @@ public class CharityController {
         this.charityService = charityService;
     }
 
-    // --- User-facing endpoint ---
+    // --- User-facing endpoint for applying ---
     @PostMapping(value = "/apply", consumes = {"multipart/form-data"})
     @PreAuthorize("hasAuthority('ROLE_DONOR')")
-    public ResponseEntity<?> applyForCharityVerification(
-            @RequestPart("application") CharityApplicationRequest request,
-            @RequestPart("document") MultipartFile document,
-            @AuthenticationPrincipal User currentUser) {
-
+    public ResponseEntity<?> applyForCharityVerification(@RequestPart("application") CharityApplicationRequest request, @RequestPart("document") MultipartFile document, @AuthenticationPrincipal User currentUser) {
         charityService.applyForVerification(request, document, currentUser);
-
         return ResponseEntity.ok(new MessageResponse(true, "Charity application submitted successfully. Awaiting admin review."));
     }
 
-    // --- Admin-facing endpoints ---
+    // --- Admin-facing endpoints for management ---
     @GetMapping
     @PreAuthorize("hasAuthority('ROLE_PLATFORM_ADMIN')")
     public ResponseEntity<List<Charity>> getAllCharities(@RequestParam(required = false) VerificationStatus status) {
-        List<Charity> charities = charityService.getCharitiesByStatus(status);
-        return ResponseEntity.ok(charities);
+        return ResponseEntity.ok(charityService.getCharitiesByStatus(status));
     }
 
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('ROLE_PLATFORM_ADMIN')")
     public ResponseEntity<Charity> approveCharity(@PathVariable Long id) {
-        Charity approvedCharity = charityService.approveCharity(id);
-        return ResponseEntity.ok(approvedCharity);
+        return ResponseEntity.ok(charityService.approveCharity(id));
     }
 
     @PostMapping("/{id}/reject")
     @PreAuthorize("hasAuthority('ROLE_PLATFORM_ADMIN')")
     public ResponseEntity<Charity> rejectCharity(@PathVariable Long id) {
-        Charity rejectedCharity = charityService.rejectCharity(id);
-        return ResponseEntity.ok(rejectedCharity);
+        return ResponseEntity.ok(charityService.rejectCharity(id));
     }
 
+    // --- Public endpoints for donors to view ---
     @GetMapping("/approved")
-    public ResponseEntity<CharityResponseDTO> getPublicCharityProfile(@PathVariable Long id){
-        try{
-            return ResponseEntity.ok(charityService.getApproveCharityById(id));
-        }
-        catch(RuntimeException e){
+    public ResponseEntity<List<CharityResponseDTO>> getApprovedCharities() {
+        return ResponseEntity.ok(charityService.getApprovedCharities());
+    }
+
+    @GetMapping("/{id}/public")
+    public ResponseEntity<CharityResponseDTO> getPublicCharityProfile(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(charityService.getApprovedCharityById(id));
+        } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
         }
     }
-
-
-
 }

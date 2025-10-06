@@ -115,4 +115,16 @@ public class CharityService {
         return CharityResponseDTO.fromCharity(charity);
 
     }
+    @Transactional(readOnly = true)
+    public CharityResponseDTO getApprovedCharityById(Long id) {
+        Charity charity = charityRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Charity not found with id: " + id));
+
+        // Security check: only return if it's approved.
+        if (charity.getStatus() != VerificationStatus.APPROVED) {
+            throw new RuntimeException("Charity not found or not approved.");
+        }
+
+        return CharityResponseDTO.fromCharity(charity);
+    }
 }

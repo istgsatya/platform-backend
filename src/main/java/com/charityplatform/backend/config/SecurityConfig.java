@@ -1,10 +1,10 @@
-// PASTE THIS ENTIRE FILE CONTENT into SecurityConfig.java
-
+// FINAL SecurityConfig.java
 package com.charityplatform.backend.config;
 
 import com.charityplatform.backend.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -15,9 +15,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-
-import org.springframework.http.HttpMethod;
 
 @Configuration
 @EnableWebSecurity
@@ -46,16 +43,12 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/**").permitAll() // Make auth endpoints public
-
-
-                        .requestMatchers(2HttpMethod.GET, "/api/charities/approved", "/api/charities/{id}/public").permitAll()
-
-                        .anyRequest().authenticated() // Protect everything else
+                        .requestMatchers("/api/auth/**").permitAll() // Public auth endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/charities/approved", "/api/charities/{id}/public").permitAll() // Public charity view endpoints
+                        .anyRequest().authenticated() // All others require a token
                 );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 }
