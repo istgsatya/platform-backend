@@ -45,6 +45,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/**").permitAll() // Public auth endpoints
                         .requestMatchers(HttpMethod.GET, "/api/charities/approved", "/api/charities/{id}/public").permitAll() // Public charity view endpoints
+
+                        .requestMatchers(HttpMethod.GET,"/api/campaigns","/api/campaigns/{id}").permitAll()
+
+
+
                         .anyRequest().authenticated() // All others require a token
                 );
 

@@ -1,6 +1,8 @@
 // src/main/java/com/charityplatform/backend/model/User.java
 package com.charityplatform.backend.model;
 
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
@@ -17,6 +19,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Slf4j
 @Entity
 @Table(name="users",
