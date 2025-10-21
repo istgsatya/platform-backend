@@ -1,5 +1,5 @@
 package com.charityplatform.backend.service;
-
+/// worst fucking sevice ever
 import com.charityplatform.backend.dto.CampaignResponseDTO;
 import com.charityplatform.backend.dto.CreateCampaignRequest;
 import com.charityplatform.backend.model.*;

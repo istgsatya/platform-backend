@@ -2,6 +2,11 @@
 package com.charityplatform.backend.model;
 
 
+
+
+
+
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
@@ -18,7 +23,8 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
-
+import java.util.List;
+import java.util.ArrayList;
 
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Slf4j
@@ -57,15 +63,34 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private Set<Role> roles = new HashSet<>();
 
-    // --- THIS IS THE CORRECTED MAPPING ---
-    // It is mapped by the field named "user" in the VerificationToken class.
+
+
+
+
+    @OneToMany(
+            mappedBy = "user",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            fetch = FetchType.LAZY
+    )
+
+    @JsonManagedReference
+    private List<Wallet> wallets = new ArrayList<>();
+
+    public List<Wallet> getWallets() {
+        return wallets;
+    }
+
+    public void setWallets(List<Wallet> wallets) {
+        this.wallets = wallets;
+    }
+
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonManagedReference
     private VerificationToken verificationToken;
-    // --- END OF CORRECTION ---
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "charity_id") // No referencedColumnName needed, 'id' is default
+    @JoinColumn(name = "charity_id") //
     @JsonIgnore
     private Charity charity;
 
