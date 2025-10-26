@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.Instant;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.charityplatform.backend.model.RequestStatus;
 
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
@@ -24,6 +25,12 @@ public class Campaign {
     @Lob
     @Column(columnDefinition = "TEXT")
     private String description;
+
+   // private RequestStatus status;
+//
+   //  public void setStatus(RequestStatus status) {
+  //      this.status = status;
+ //   }
 
     @NotNull
     @Positive
