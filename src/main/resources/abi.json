@@ -235,6 +235,19 @@
         "internalType": "uint256",
         "name": "_requestId",
         "type": "uint256"
+      }
+    ],
+    "name": "triggerEarlyExecution",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_requestId",
+        "type": "uint256"
       },
       {
         "internalType": "bool",

@@ -52,6 +52,8 @@ public class PlatformLedger extends Contract {
 
     public static final String FUNC_RECORDDONATION = "recordDonation";
 
+    public static final String FUNC_TRIGGEREARLYEXECUTION = "triggerEarlyExecution";
+
     public static final String FUNC_VOTEONREQUEST = "voteOnRequest";
 
     public static final String FUNC_CAMPAIGNBALANCES = "campaignBalances";
@@ -341,6 +343,14 @@ public class PlatformLedger extends Contract {
                 new org.web3j.abi.datatypes.Utf8String(_paymentMethod)), 
                 Collections.<TypeReference<?>>emptyList());
         return executeRemoteCallTransaction(function, weiValue);
+    }
+
+    public RemoteFunctionCall<TransactionReceipt> triggerEarlyExecution(BigInteger _requestId) {
+        final Function function = new Function(
+                FUNC_TRIGGEREARLYEXECUTION, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId)), 
+                Collections.<TypeReference<?>>emptyList());
+        return executeRemoteCallTransaction(function);
     }
 
     public RemoteFunctionCall<TransactionReceipt> voteOnRequest(BigInteger _requestId,
