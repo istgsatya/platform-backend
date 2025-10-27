@@ -33,6 +33,7 @@ public class WithdrawalController {
             @RequestPart("visualProof") MultipartFile visualProof,
             @AuthenticationPrincipal User currentUser
     ) {
+        // We can add better exception handling here later if needed
         withdrawalService.createRff(request, financialProof, visualProof, currentUser);
         return ResponseEntity.ok(new MessageResponse(true, "Withdrawal Request created successfully and is now open for voting."));
     }
@@ -55,4 +56,26 @@ public class WithdrawalController {
             return new ResponseEntity<>(new MessageResponse(false, "An unexpected error occurred: " + e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+
+    // --- START: NEW V4 ENDPOINT ---
+    @PostMapping("/{id}/appeal")
+    @PreAuthorize("hasAuthority('ROLE_CHARITY_ADMIN')")
+    public ResponseEntity<?> appealRequest(
+            @PathVariable("id") Long withdrawalRequestId,
+            @AuthenticationPrincipal User currentUser) {
+        try {
+            withdrawalService.appealForReview(withdrawalRequestId, currentUser);
+            return ResponseEntity.ok(new MessageResponse(true, "Request successfully appealed and sent for admin review."));
+        } catch (AccessDeniedException e) {
+            return new ResponseEntity<>(new MessageResponse(false, e.getMessage()), HttpStatus.FORBIDDEN);
+        } catch (IllegalStateException e) {
+            // For timelock errors or wrong status
+            return new ResponseEntity<>(new MessageResponse(false, e.getMessage()), HttpStatus.BAD_REQUEST);
+        } catch (RuntimeException e) {
+            // For "not found" errors
+            return new ResponseEntity<>(new MessageResponse(false, e.getMessage()), HttpStatus.NOT_FOUND);
+        }
+    }
+    // --- END: NEW V4 ENDPOINT ---
 }

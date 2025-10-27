@@ -46,21 +46,19 @@ public class PlatformLedger extends Contract {
 
     public static final String FUNC_ADMINAPPROVEREQUEST = "adminApproveRequest";
 
-    public static final String FUNC_CREATEWITHDRAWALREQUEST = "createWithdrawalRequest";
-
-    public static final String FUNC_EXECUTEREQUEST = "executeRequest";
-
-    public static final String FUNC_RECORDDONATION = "recordDonation";
-
-    public static final String FUNC_TRIGGEREARLYEXECUTION = "triggerEarlyExecution";
-
-    public static final String FUNC_VOTEONREQUEST = "voteOnRequest";
-
     public static final String FUNC_CAMPAIGNBALANCES = "campaignBalances";
 
     public static final String FUNC_CAMPAIGNCONTRIBUTIONS = "campaignContributions";
 
+    public static final String FUNC_CREATEWITHDRAWALREQUEST = "createWithdrawalRequest";
+
     public static final String FUNC_DONATIONHISTORY = "donationHistory";
+
+    public static final String FUNC_EXECUTEREQUEST = "executeRequest";
+
+    public static final String FUNC_FORCEEXECUTEBYADMIN = "forceExecuteByAdmin";
+
+    public static final String FUNC_FORCEREJECTBYADMIN = "forceRejectByAdmin";
 
     public static final String FUNC_HASVOTED = "hasVoted";
 
@@ -69,6 +67,12 @@ public class PlatformLedger extends Contract {
     public static final String FUNC_PLATFORMFEEPERCENTAGE = "platformFeePercentage";
 
     public static final String FUNC_PLATFORMOWNER = "platformOwner";
+
+    public static final String FUNC_RECORDDONATION = "recordDonation";
+
+    public static final String FUNC_TRIGGEREARLYEXECUTION = "triggerEarlyExecution";
+
+    public static final String FUNC_VOTEONREQUEST = "voteOnRequest";
 
     public static final String FUNC_WITHDRAWALREQUESTS = "withdrawalRequests";
 
@@ -311,58 +315,6 @@ public class PlatformLedger extends Contract {
         return executeRemoteCallTransaction(function);
     }
 
-    public RemoteFunctionCall<TransactionReceipt> createWithdrawalRequest(BigInteger _campaignId,
-            String _vendor, BigInteger _amount, String _purpose, String _financialProofHash,
-            String _visualProofHash) {
-        final Function function = new Function(
-                FUNC_CREATEWITHDRAWALREQUEST, 
-                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_campaignId), 
-                new org.web3j.abi.datatypes.Address(160, _vendor), 
-                new org.web3j.abi.datatypes.generated.Uint256(_amount), 
-                new org.web3j.abi.datatypes.Utf8String(_purpose), 
-                new org.web3j.abi.datatypes.Utf8String(_financialProofHash), 
-                new org.web3j.abi.datatypes.Utf8String(_visualProofHash)), 
-                Collections.<TypeReference<?>>emptyList());
-        return executeRemoteCallTransaction(function);
-    }
-
-    public RemoteFunctionCall<TransactionReceipt> executeRequest(BigInteger _requestId) {
-        final Function function = new Function(
-                FUNC_EXECUTEREQUEST, 
-                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId)), 
-                Collections.<TypeReference<?>>emptyList());
-        return executeRemoteCallTransaction(function);
-    }
-
-    public RemoteFunctionCall<TransactionReceipt> recordDonation(BigInteger _campaignId,
-            String _donor, String _paymentMethod, BigInteger weiValue) {
-        final Function function = new Function(
-                FUNC_RECORDDONATION, 
-                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_campaignId), 
-                new org.web3j.abi.datatypes.Address(160, _donor), 
-                new org.web3j.abi.datatypes.Utf8String(_paymentMethod)), 
-                Collections.<TypeReference<?>>emptyList());
-        return executeRemoteCallTransaction(function, weiValue);
-    }
-
-    public RemoteFunctionCall<TransactionReceipt> triggerEarlyExecution(BigInteger _requestId) {
-        final Function function = new Function(
-                FUNC_TRIGGEREARLYEXECUTION, 
-                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId)), 
-                Collections.<TypeReference<?>>emptyList());
-        return executeRemoteCallTransaction(function);
-    }
-
-    public RemoteFunctionCall<TransactionReceipt> voteOnRequest(BigInteger _requestId,
-            Boolean _approve) {
-        final Function function = new Function(
-                FUNC_VOTEONREQUEST, 
-                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId), 
-                new org.web3j.abi.datatypes.Bool(_approve)), 
-                Collections.<TypeReference<?>>emptyList());
-        return executeRemoteCallTransaction(function);
-    }
-
     public RemoteFunctionCall<BigInteger> campaignBalances(BigInteger param0) {
         final Function function = new Function(FUNC_CAMPAIGNBALANCES, 
                 Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(param0)), 
@@ -376,6 +328,21 @@ public class PlatformLedger extends Contract {
                 new org.web3j.abi.datatypes.Address(160, param1)), 
                 Arrays.<TypeReference<?>>asList(new TypeReference<Uint256>() {}));
         return executeRemoteCallSingleValueReturn(function, BigInteger.class);
+    }
+
+    public RemoteFunctionCall<TransactionReceipt> createWithdrawalRequest(BigInteger _campaignId,
+            String _vendor, BigInteger _amount, String _purpose, String _financialProofHash,
+            String _visualProofHash) {
+        final Function function = new Function(
+                FUNC_CREATEWITHDRAWALREQUEST, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_campaignId), 
+                new org.web3j.abi.datatypes.Address(160, _vendor), 
+                new org.web3j.abi.datatypes.generated.Uint256(_amount), 
+                new org.web3j.abi.datatypes.Utf8String(_purpose), 
+                new org.web3j.abi.datatypes.Utf8String(_financialProofHash), 
+                new org.web3j.abi.datatypes.Utf8String(_visualProofHash)), 
+                Collections.<TypeReference<?>>emptyList());
+        return executeRemoteCallTransaction(function);
     }
 
     public RemoteFunctionCall<Tuple4<String, BigInteger, BigInteger, String>> donationHistory(
@@ -396,6 +363,30 @@ public class PlatformLedger extends Contract {
                                 (String) results.get(3).getValue());
                     }
                 });
+    }
+
+    public RemoteFunctionCall<TransactionReceipt> executeRequest(BigInteger _requestId) {
+        final Function function = new Function(
+                FUNC_EXECUTEREQUEST, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId)), 
+                Collections.<TypeReference<?>>emptyList());
+        return executeRemoteCallTransaction(function);
+    }
+
+    public RemoteFunctionCall<TransactionReceipt> forceExecuteByAdmin(BigInteger _requestId) {
+        final Function function = new Function(
+                FUNC_FORCEEXECUTEBYADMIN, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId)), 
+                Collections.<TypeReference<?>>emptyList());
+        return executeRemoteCallTransaction(function);
+    }
+
+    public RemoteFunctionCall<TransactionReceipt> forceRejectByAdmin(BigInteger _requestId) {
+        final Function function = new Function(
+                FUNC_FORCEREJECTBYADMIN, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId)), 
+                Collections.<TypeReference<?>>emptyList());
+        return executeRemoteCallTransaction(function);
     }
 
     public RemoteFunctionCall<Boolean> hasVoted(BigInteger param0, String param1) {
@@ -425,6 +416,35 @@ public class PlatformLedger extends Contract {
                 Arrays.<Type>asList(), 
                 Arrays.<TypeReference<?>>asList(new TypeReference<Address>() {}));
         return executeRemoteCallSingleValueReturn(function, String.class);
+    }
+
+    public RemoteFunctionCall<TransactionReceipt> recordDonation(BigInteger _campaignId,
+            String _donor, String _paymentMethod, BigInteger weiValue) {
+        final Function function = new Function(
+                FUNC_RECORDDONATION, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_campaignId), 
+                new org.web3j.abi.datatypes.Address(160, _donor), 
+                new org.web3j.abi.datatypes.Utf8String(_paymentMethod)), 
+                Collections.<TypeReference<?>>emptyList());
+        return executeRemoteCallTransaction(function, weiValue);
+    }
+
+    public RemoteFunctionCall<TransactionReceipt> triggerEarlyExecution(BigInteger _requestId) {
+        final Function function = new Function(
+                FUNC_TRIGGEREARLYEXECUTION, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId)), 
+                Collections.<TypeReference<?>>emptyList());
+        return executeRemoteCallTransaction(function);
+    }
+
+    public RemoteFunctionCall<TransactionReceipt> voteOnRequest(BigInteger _requestId,
+            Boolean _approve) {
+        final Function function = new Function(
+                FUNC_VOTEONREQUEST, 
+                Arrays.<Type>asList(new org.web3j.abi.datatypes.generated.Uint256(_requestId), 
+                new org.web3j.abi.datatypes.Bool(_approve)), 
+                Collections.<TypeReference<?>>emptyList());
+        return executeRemoteCallTransaction(function);
     }
 
     public RemoteFunctionCall<Tuple12<BigInteger, String, String, BigInteger, String, String, String, BigInteger, BigInteger, BigInteger, BigInteger, BigInteger>> withdrawalRequests(

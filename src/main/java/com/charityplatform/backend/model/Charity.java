@@ -4,8 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.extern.apachecommons.CommonsLog;
-import com.fasterxml.jackson.annotation.JsonBackReference;
 
 import java.time.Instant;
 
@@ -31,9 +29,6 @@ public class Charity {
 
     private String registrationDocumentUrl;
 
-
-
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private VerificationStatus status;
@@ -42,6 +37,11 @@ public class Charity {
     private Instant createdAt;
 
     private Instant updatedAt;
+
+    // --- START: NEW FIELD ---
+    @Column
+    private Instant rffCooldownUntil; // Stores the timestamp until which a charity cannot create new RFFs
+    // --- END: NEW FIELD ---
 
     @OneToOne(mappedBy ="charity")
     private User adminUser;
@@ -119,4 +119,14 @@ public class Charity {
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+    // --- START: NEW GETTER/SETTER ---
+    public Instant getRffCooldownUntil() {
+        return rffCooldownUntil;
+    }
+
+    public void setRffCooldownUntil(Instant rffCooldownUntil) {
+        this.rffCooldownUntil = rffCooldownUntil;
+    }
+    // --- END: NEW GETTER/SETTER ---
 }
