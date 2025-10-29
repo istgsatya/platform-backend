@@ -173,8 +173,8 @@ public class WithdrawalService {
 
         // Timelock check: must wait 12 hours
         // HACKATHON TEST MODE: Timelock set to 15 seconds
-        //////////////////////Instant appealAvailableTime = request.getCreatedAt().plus(15, ChronoUnit.SECONDS);
-        Instant appealAvailableTime = request.getCreatedAt().plus(12, ChronoUnit.HOURS);
+        Instant appealAvailableTime = request.getCreatedAt().plus(15, ChronoUnit.SECONDS);
+      //////////////////////  Instant appealAvailableTime = request.getCreatedAt().plus(12, ChronoUnit.HOURS);
         if (Instant.now().isBefore(appealAvailableTime)) {
             throw new IllegalStateException("You cannot appeal this request yet. Please wait until " + appealAvailableTime);
         }
@@ -215,6 +215,7 @@ public class WithdrawalService {
             throw new IllegalStateException("This request is not awaiting admin decision and cannot be force-rejected.");
         }
 
+        
         TransactionReceipt receipt = platformLedger.forceRejectByAdmin(BigInteger.valueOf(request.getOnChainRequestId())).send();
         if (!receipt.isStatusOK()) {
             throw new RuntimeException("Blockchain transaction to force-reject failed. Status: " + receipt.getStatus());
@@ -223,7 +224,7 @@ public class WithdrawalService {
         request.setStatus(RequestStatus.REJECTED);
         withdrawalRequestRepository.save(request);
 
-        // Apply the 24-hour cooldown penalty to the charity
+
         Charity charity = request.getCampaign().getCharity();
         Instant cooldownEnd = Instant.now().plus(24, ChronoUnit.HOURS);
         charity.setRffCooldownUntil(cooldownEnd);
@@ -232,5 +233,5 @@ public class WithdrawalService {
         log.info("SUCCESS: Request {} has been force-rejected by Platform Admin. Charity {} is on cooldown until {}",
                 withdrawalRequestId, charity.getName(), cooldownEnd);
     }
-    // --- END: NEW V4 METHODS ---
+
 }
