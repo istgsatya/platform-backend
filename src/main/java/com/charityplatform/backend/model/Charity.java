@@ -26,21 +26,23 @@ public class Charity {
     @Column(columnDefinition= "TEXT")
     private String description;
 
-
     private String registrationDocumentUrl;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private VerificationStatus status;
 
-    @Column(nullable = false,updatable = false)
+    @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
     private Instant updatedAt;
 
-    // --- START: NEW FIELD ---
     @Column
-    private Instant rffCooldownUntil; // Stores the timestamp until which a charity cannot create new RFFs
+    private Instant rffCooldownUntil;
+
+    // --- START: NEW FIELD ---
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int validatedReportCount = 0;
     // --- END: NEW FIELD ---
 
     @OneToOne(mappedBy ="charity")
@@ -50,6 +52,7 @@ public class Charity {
     protected void onCreate() {
         createdAt = Instant.now();
         status = VerificationStatus.PENDING;
+        validatedReportCount = 0; // Explicitly set to 0 on creation
     }
     @PreUpdate
     protected void onUpdate() {
@@ -120,13 +123,21 @@ public class Charity {
         this.updatedAt = updatedAt;
     }
 
-    // --- START: NEW GETTER/SETTER ---
     public Instant getRffCooldownUntil() {
         return rffCooldownUntil;
     }
 
     public void setRffCooldownUntil(Instant rffCooldownUntil) {
         this.rffCooldownUntil = rffCooldownUntil;
+    }
+
+    // --- START: NEW GETTER/SETTER ---
+    public int getValidatedReportCount() {
+        return validatedReportCount;
+    }
+
+    public void setValidatedReportCount(int validatedReportCount) {
+        this.validatedReportCount = validatedReportCount;
     }
     // --- END: NEW GETTER/SETTER ---
 }

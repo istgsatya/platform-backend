@@ -1,13 +1,10 @@
 package com.charityplatform.backend.service;
 
 import com.charityplatform.backend.dto.CreateReportRequest;
-import com.charityplatform.backend.model.Report;
-import com.charityplatform.backend.model.ReportStatus;
-import com.charityplatform.backend.model.User;
-import com.charityplatform.backend.model.WithdrawalRequest;
-import com.charityplatform.backend.repository.ReportRepository;
-import com.charityplatform.backend.repository.UserRepository;
-import com.charityplatform.backend.repository.WithdrawalRequestRepository;
+import com.charityplatform.backend.model.*;
+import com.charityplatform.backend.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,74 +12,100 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReportService {
 
-    // Define how many points a valid report is worth
+    private static final Logger log = LoggerFactory.getLogger(ReportService.class);
     private static final int TRUST_POINTS_PER_VALID_REPORT = 10;
+    private static final int BLACKLIST_THRESHOLD = 3;
 
     private final ReportRepository reportRepository;
     private final UserRepository userRepository;
     private final WithdrawalRequestRepository withdrawalRequestRepository;
+    private final CharityRepository charityRepository;
+    private final BlacklistedIdentifierRepository blacklistedIdentifierRepository;
 
     @Autowired
-    public ReportService(ReportRepository reportRepository, UserRepository userRepository, WithdrawalRequestRepository withdrawalRequestRepository) {
+    public ReportService(ReportRepository reportRepository, UserRepository userRepository,
+                         WithdrawalRequestRepository withdrawalRequestRepository, CharityRepository charityRepository,
+                         BlacklistedIdentifierRepository blacklistedIdentifierRepository) {
         this.reportRepository = reportRepository;
         this.userRepository = userRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
+        this.charityRepository = charityRepository;
+        this.blacklistedIdentifierRepository = blacklistedIdentifierRepository;
     }
 
     @Transactional
     public Report createReport(CreateReportRequest createReportRequest, User currentUser) {
-        // Fetch the managed user entity to ensure it's attached to the session
-        User reporter = userRepository.findById(currentUser.getId())
-                .orElseThrow(() -> new RuntimeException("Authenticated user not found."));
-
-        // Fetch the withdrawal request that is being reported
-        WithdrawalRequest reportedRequest = withdrawalRequestRepository.findById(createReportRequest.getReportedRequestId())
-                .orElseThrow(() -> new RuntimeException("Withdrawal request to be reported not found."));
-
-        // Create the new report entity
+        User reporter = userRepository.findById(currentUser.getId()).orElseThrow(() -> new RuntimeException("Authenticated user not found."));
+        WithdrawalRequest reportedRequest = withdrawalRequestRepository.findById(createReportRequest.getReportedRequestId()).orElseThrow(() -> new RuntimeException("Withdrawal request to be reported not found."));
         Report report = new Report();
         report.setReporter(reporter);
         report.setReportedRequest(reportedRequest);
         report.setReason(createReportRequest.getReason());
-        // The @PrePersist annotation on the Report entity will automatically set the status to PENDING
-
-        // Save and return the new report
         return reportRepository.save(report);
     }
 
-    // --- START: NEW GAMIFICATION LOGIC METHOD ---
     @Transactional
     public String validateReport(Long reportId, boolean isValid) {
-        // 1. Fetch the report
-        Report report = reportRepository.findById(reportId)
-                .orElseThrow(() -> new RuntimeException("Report with ID " + reportId + " not found."));
-
-        // 2. Guard Clause: Check if it's already been reviewed.
+        Report report = reportRepository.findById(reportId).orElseThrow(() -> new RuntimeException("Report with ID " + reportId + " not found."));
         if (report.getStatus() != ReportStatus.PENDING) {
             throw new IllegalStateException("This report has already been reviewed and its status is " + report.getStatus());
         }
-
         if (isValid) {
-            // 3a. The report is valid. Update status and reward the user.
             report.setStatus(ReportStatus.VALIDATED);
             User reporter = report.getReporter();
-
-            int newTrustPoints = reporter.getTrustPoints() + TRUST_POINTS_PER_VALID_REPORT;
-            reporter.setTrustPoints(newTrustPoints);
-
-            // Here you could add logic to upgrade vipLevel, e.g., if (newTrustPoints >= 100) { reporter.setVipLevel(1); }
-
-            userRepository.save(reporter); // This save cascades the trust point update
+            reporter.setTrustPoints(reporter.getTrustPoints() + TRUST_POINTS_PER_VALID_REPORT);
+            userRepository.save(reporter);
             reportRepository.save(report);
 
-            return "Report " + reportId + " has been validated. User '" + reporter.getUsername() + "' has been awarded " + TRUST_POINTS_PER_VALID_REPORT + " trust points.";
+            Charity reportedCharity = report.getReportedRequest().getCampaign().getCharity();
+            int newReportCount = reportedCharity.getValidatedReportCount() + 1;
+            reportedCharity.setValidatedReportCount(newReportCount);
+
+            if (newReportCount >= BLACKLIST_THRESHOLD) {
+                blacklistCharity(reportedCharity);
+                return "Report " + reportId + " validated. Charity '" + reportedCharity.getName() + "' has been PERMANENTLY BLACKLISTED.";
+            } else {
+                charityRepository.save(reportedCharity);
+                return "Report " + reportId + " validated. Charity '" + reportedCharity.getName() + "' now has " + newReportCount + " validated reports against it.";
+            }
         } else {
-            // 3b. The report is invalid. Just update the status.
             report.setStatus(ReportStatus.REJECTED);
             reportRepository.save(report);
-
             return "Report " + reportId + " has been rejected.";
         }
     }
-    // --- END: NEW GAMIFICATION LOGIC METHOD ---
+
+    private void blacklistCharity(Charity charity) {
+        log.warn("BLACKLISTING charity '{}' (ID: {}). Three strikes rule violated.", charity.getName(), charity.getId());
+        charity.setStatus(VerificationStatus.BLACKLISTED);
+        charityRepository.save(charity);
+
+        User admin = charity.getAdminUser();
+        if (admin != null && !admin.getWallets().isEmpty()) {
+            String adminWallet = admin.getWallets().get(0).getAddress();
+            createBlacklistEntry(adminWallet, IdentifierType.ETH_ADDRESS, "Admin wallet of blacklisted charity ID: " + charity.getId());
+        }
+
+        // --- THE FIX IS HERE ---
+        // Instead of blacklisting the UUID-prefixed stored name, we parse the original filename out of it and blacklist that.
+        String storedFileName = charity.getRegistrationDocumentUrl();
+        if (storedFileName != null && storedFileName.contains(".")) {
+            // This logic assumes the format "UUID.original.file.name.txt"
+            String originalFileName = storedFileName.substring(storedFileName.indexOf('.') + 1);
+            createBlacklistEntry(originalFileName, IdentifierType.REGISTRATION_DOCUMENT_URL, "Registration document of blacklisted charity ID: " + charity.getId());
+        }
+        // --- END OF FIX ---
+    }
+
+    private void createBlacklistEntry(String value, IdentifierType type, String reason) {
+        if (value == null || value.isBlank()) return;
+        if (!blacklistedIdentifierRepository.existsByIdentifierValueAndIdentifierType(value, type)) {
+            BlacklistedIdentifier entry = new BlacklistedIdentifier();
+            entry.setIdentifierValue(value);
+            entry.setIdentifierType(type);
+            entry.setReason(reason);
+            blacklistedIdentifierRepository.save(entry);
+            log.info("Added '{}' to the blacklist. Reason: {}", value, reason);
+        }
+    }
 }
