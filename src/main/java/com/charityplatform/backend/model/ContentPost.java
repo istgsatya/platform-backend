@@ -5,6 +5,11 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "content_posts")
+/// /hope the motherfucking lazintiallizngexception is gone fuck you hibernate bithc stip closing the session
+@NamedEntityGraph(
+        name = "ContentPost.withCharity",
+        attributeNodes = @NamedAttributeNode("charity")
+)
 public class ContentPost {
 
     @Id
