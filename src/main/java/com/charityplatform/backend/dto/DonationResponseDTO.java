@@ -33,8 +33,7 @@ public class DonationResponseDTO {
         return dto;
     }
 
-    // --- Getters and Setters ---
-    // (Generate them or write them manually)
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public BigDecimal getAmount() { return amount; }
