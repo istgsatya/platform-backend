@@ -9,6 +9,10 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "withdrawal_requests")
+@NamedEntityGraph(
+        name = "WithdrawalRequest.withCampaign",
+        attributeNodes = @NamedAttributeNode("campaign")
+)
 public class WithdrawalRequest {
 
 
@@ -16,7 +20,7 @@ public class WithdrawalRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // This is the ID of the request on the smart contract
+
     @Column(unique = true)
     private Long onChainRequestId;
 
@@ -47,7 +51,13 @@ public class WithdrawalRequest {
     @PrePersist
     protected void onCreate() {
         createdAt = Instant.now();
-        status = RequestStatus.PENDING_VOTE;
+
+        if (status == null) {
+            status = RequestStatus.PENDING_VOTE;
+        }
+
+
+        //// status = RequestStatus.PENDING_VOTE;
     }
 
     public Long getId() {

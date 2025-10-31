@@ -1,4 +1,3 @@
-// FINAL SecurityConfig.java
 package com.charityplatform.backend.config;
 
 import com.charityplatform.backend.security.JwtAuthenticationFilter;
@@ -43,14 +42,16 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/**").permitAll() // Public auth endpoints
-                        .requestMatchers(HttpMethod.GET, "/api/charities/approved", "/api/charities/{id}/public").permitAll() // Public charity view endpoints
+                        // --- Public Endpoints ---
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/charities/approved", "/api/charities/{id}/public").permitAll()
 
-                        .requestMatchers(HttpMethod.GET,"/api/campaigns","/api/campaigns/{id}").permitAll()
+                        // --- THE FIX IS HERE ---
+                        // We need to add our new endpoints to the public list.
+                        .requestMatchers(HttpMethod.GET,"/api/campaigns","/api/campaigns/{id}", "/api/campaigns/{id}/withdrawals").permitAll()
 
-
-
-                        .anyRequest().authenticated() // All others require a token
+                        // All others require authentication.
+                        .anyRequest().authenticated()
                 );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

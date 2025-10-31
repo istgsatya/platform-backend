@@ -2,6 +2,7 @@ package com.charityplatform.backend.service;
 
 import com.charityplatform.backend.contracts.PlatformLedger;
 import com.charityplatform.backend.dto.CreateWithdrawalRequest;
+import com.charityplatform.backend.dto.WithdrawalResponseDTO;
 import com.charityplatform.backend.model.*;
 import com.charityplatform.backend.repository.*; // Changed to wildcard import
 import org.slf4j.Logger;
@@ -19,6 +20,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit; // <-- New Import
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class WithdrawalService {
@@ -215,7 +217,7 @@ public class WithdrawalService {
             throw new IllegalStateException("This request is not awaiting admin decision and cannot be force-rejected.");
         }
 
-        
+
         TransactionReceipt receipt = platformLedger.forceRejectByAdmin(BigInteger.valueOf(request.getOnChainRequestId())).send();
         if (!receipt.isStatusOK()) {
             throw new RuntimeException("Blockchain transaction to force-reject failed. Status: " + receipt.getStatus());
@@ -232,6 +234,16 @@ public class WithdrawalService {
 
         log.info("SUCCESS: Request {} has been force-rejected by Platform Admin. Charity {} is on cooldown until {}",
                 withdrawalRequestId, charity.getName(), cooldownEnd);
+    }
+    @Transactional(readOnly = true)
+    public List<WithdrawalResponseDTO> getWithdrawalsForCampaign(Long campaignId) {
+        // Use our new @EntityGraph-powered repository method.
+        List<WithdrawalRequest> requests = withdrawalRequestRepository.findByCampaignIdOrderByCreatedAtDesc(campaignId);
+
+        // Convert to DTOs while the session is still open.
+        return requests.stream()
+                .map(WithdrawalResponseDTO::fromEntity)
+                .collect(Collectors.toList());
     }
 
 }
