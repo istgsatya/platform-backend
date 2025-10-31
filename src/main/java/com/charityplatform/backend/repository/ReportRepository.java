@@ -18,4 +18,8 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
      */
     @EntityGraph(value = "Report.withAllDetails")
     List<Report> findByStatus(ReportStatus status);
+
+    long countByStatus(ReportStatus status);
+
+
 }

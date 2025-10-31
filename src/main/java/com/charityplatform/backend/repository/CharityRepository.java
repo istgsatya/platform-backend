@@ -13,4 +13,6 @@ import java.util.List;
 public interface CharityRepository extends JpaRepository<Charity,Long> {
 
     List<Charity> findByStatus(VerificationStatus status);
+
+    long countByStatus(VerificationStatus status);
 }
