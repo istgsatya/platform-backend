@@ -5,6 +5,29 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "reports")
+// --- START: ADD THE ENTITY GRAPH ---
+@NamedEntityGraph(
+        name = "Report.withAllDetails",
+        attributeNodes = {
+                @NamedAttributeNode("reporter"),
+                @NamedAttributeNode(value = "reportedRequest", subgraph = "reportedRequest-subgraph")
+        },
+        subgraphs = {
+                @NamedSubgraph(
+                        name = "reportedRequest-subgraph",
+                        attributeNodes = {
+                                @NamedAttributeNode(value = "campaign", subgraph = "campaign-subgraph")
+                        }
+                ),
+                @NamedSubgraph(
+                        name = "campaign-subgraph",
+                        attributeNodes = {
+                                @NamedAttributeNode("charity")
+                        }
+                )
+        }
+)
+// --- END: ADD THE ENTITY GRAPH ---
 public class Report {
 
     @Id
@@ -35,7 +58,7 @@ public class Report {
         status = ReportStatus.PENDING; // New reports are always pending review
     }
 
-    // --- Getters and Setters ---
+    // --- Getters and Setters (unchanged) ---
 
     public Long getId() {
         return id;

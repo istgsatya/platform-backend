@@ -1,6 +1,7 @@
 package com.charityplatform.backend.service;
 
 import com.charityplatform.backend.dto.CreateReportRequest;
+import com.charityplatform.backend.dto.ReportResponseDTO; // <-- New Import
 import com.charityplatform.backend.model.*;
 import com.charityplatform.backend.repository.*;
 import org.slf4j.Logger;
@@ -8,6 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List; // <-- New Import
+import java.util.stream.Collectors; // <-- New Import
 
 @Service
 public class ReportService {
@@ -75,6 +79,20 @@ public class ReportService {
         }
     }
 
+
+    @Transactional(readOnly = true)
+    public List<ReportResponseDTO> getPendingReports() {
+
+        List<Report> pendingReports = reportRepository.findByStatus(ReportStatus.PENDING);
+
+
+        return pendingReports.stream()
+                .map(ReportResponseDTO::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+
+
     private void blacklistCharity(Charity charity) {
         log.warn("BLACKLISTING charity '{}' (ID: {}). Three strikes rule violated.", charity.getName(), charity.getId());
         charity.setStatus(VerificationStatus.BLACKLISTED);
@@ -86,15 +104,11 @@ public class ReportService {
             createBlacklistEntry(adminWallet, IdentifierType.ETH_ADDRESS, "Admin wallet of blacklisted charity ID: " + charity.getId());
         }
 
-        // --- THE FIX IS HERE ---
-        // Instead of blacklisting the UUID-prefixed stored name, we parse the original filename out of it and blacklist that.
         String storedFileName = charity.getRegistrationDocumentUrl();
         if (storedFileName != null && storedFileName.contains(".")) {
-            // This logic assumes the format "UUID.original.file.name.txt"
             String originalFileName = storedFileName.substring(storedFileName.indexOf('.') + 1);
             createBlacklistEntry(originalFileName, IdentifierType.REGISTRATION_DOCUMENT_URL, "Registration document of blacklisted charity ID: " + charity.getId());
         }
-        // --- END OF FIX ---
     }
 
     private void createBlacklistEntry(String value, IdentifierType type, String reason) {
