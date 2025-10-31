@@ -1,5 +1,6 @@
 package com.charityplatform.backend.controller;
 
+import com.charityplatform.backend.dto.CharityDashboardDTO;
 import com.charityplatform.backend.dto.DonorDashboardDTO;
 import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.service.DashboardService;
@@ -26,6 +27,12 @@ public class DashboardController {
     @PreAuthorize("hasAuthority('ROLE_DONOR')")
     public ResponseEntity<DonorDashboardDTO> getDonorDashboard(@AuthenticationPrincipal User currentUser) {
         DonorDashboardDTO dashboardData = dashboardService.getDonorDashboardData(currentUser);
+        return ResponseEntity.ok(dashboardData);
+    }
+    @GetMapping("/charity")
+    @PreAuthorize("hasAuthority('ROLE_CHARITY_ADMIN')")
+    public ResponseEntity<CharityDashboardDTO> getCharityDashboard(@AuthenticationPrincipal User currentUser) {
+        CharityDashboardDTO dashboardData = dashboardService.getCharityDashboardData(currentUser);
         return ResponseEntity.ok(dashboardData);
     }
 }

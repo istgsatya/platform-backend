@@ -14,19 +14,19 @@ import java.util.List;
 public interface DonationRepository extends JpaRepository<Donation, Long> {
 
     List<Donation> findByCampaignId(Long campaignId);
-
     boolean existsByTransactionHash(String transactionHash);
 
     @EntityGraph(value = "Donation.withUserAndCampaign")
     List<Donation> findByUserIdOrderByCreatedAtDesc(Long userId);
 
-
     @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.user.id = :userId")
     BigDecimal sumAmountByUserId(@Param("userId") Long userId);
-
 
     @Query("SELECT COUNT(DISTINCT d.campaign.id) FROM Donation d WHERE d.user.id = :userId")
     long countDistinctCampaignsByUserId(@Param("userId") Long userId);
 
+
+    @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.campaign.charity.id = :charityId")
+    BigDecimal sumTotalDonationsByCharityId(@Param("charityId") Long charityId);
 
 }

@@ -23,5 +23,5 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
 
     @Query("SELECT c FROM Campaign c JOIN FETCH c.charity WHERE c.id = :id")
     Optional<Campaign> findByIdWithCharity(@Param("id") Long id);
-
+    long countByCharityIdAndStatus(Long charityId, CampaignStatus status);
 }

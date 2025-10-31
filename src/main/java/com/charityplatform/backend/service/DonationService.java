@@ -2,21 +2,24 @@ package com.charityplatform.backend.service;
 
 
 import com.charityplatform.backend.contracts.PlatformLedger;
+import com.charityplatform.backend.dto.CharityDashboardDTO;
 import com.charityplatform.backend.dto.CryptoDonationRequest;
 import com.charityplatform.backend.dto.DonationResponseDTO; // <-- New Import
 import com.charityplatform.backend.dto.OnChainDonationInfo;
-import com.charityplatform.backend.model.Campaign;
-import com.charityplatform.backend.model.Donation;
-import com.charityplatform.backend.model.User;
+import com.charityplatform.backend.model.*;
 import com.charityplatform.backend.repository.CampaignRepository;
 import com.charityplatform.backend.repository.DonationRepository;
+import com.charityplatform.backend.repository.WithdrawalRequestRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+////import java.nio.file.AccessDeniedException;
 import java.util.List;
 import java.util.stream.Collectors; // <-- New Import
 
@@ -26,13 +29,15 @@ public class DonationService {
     private final PlatformLedger platformLedger;
     private final DonationRepository donationRepository;
     private final CampaignRepository campaignRepository;
+    private final WithdrawalRequestRepository withdrawalRequestRepository;
 
     @Autowired
-    public DonationService(Web3j web3j, PlatformLedger platformLedger, DonationRepository donationRepository, CampaignRepository campaignRepository) {
+    public DonationService(Web3j web3j, PlatformLedger platformLedger, DonationRepository donationRepository, CampaignRepository campaignRepository, WithdrawalRequestRepository withdrawalRequestRepository) {
         this.web3j = web3j;
         this.platformLedger = platformLedger;
         this.donationRepository = donationRepository;
         this.campaignRepository = campaignRepository;
+        this.withdrawalRequestRepository=withdrawalRequestRepository;;
     }
 
     @Transactional
@@ -75,14 +80,32 @@ public class DonationService {
     // --- START: NEW HISTORY METHOD ---
     @Transactional(readOnly = true)
     public List<DonationResponseDTO> getDonationsForCurrentUser(User currentUser) {
-        // Fetch the raw donation entities for the current user, newest first.
-        // We will add an @EntityGraph here in a moment in the repository.
-        List<Donation> donations = donationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
+       List<Donation> donations = donationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
 
         // Convert the list of entities to a list of safe DTOs.
         return donations.stream()
                 .map(DonationResponseDTO::fromDonation)
                 .collect(Collectors.toList());
     }
-    // --- END: NEW HISTORY METHOD ---
+    @Transactional(readOnly = true)
+    public CharityDashboardDTO getCharityDashboardData(User currentUser) {
+        Charity charity = currentUser.getCharity();
+        if (charity == null) {
+            throw new AccessDeniedException("User is not associated with a charity.");
+        }
+        Long charityId = charity.getId();
+
+        BigDecimal totalRaised = donationRepository.sumTotalDonationsByCharityId(charityId);
+        long activeCampaigns = campaignRepository.countByCharityIdAndStatus(charityId, CampaignStatus.ACTIVE);
+        long successfulCampaigns = campaignRepository.countByCharityIdAndStatus(charityId, CampaignStatus.COMPLETED);
+        long pendingWithdrawals = withdrawalRequestRepository.countPendingByCharityId(charityId);
+
+        CharityDashboardDTO dto = new CharityDashboardDTO();
+        dto.setTotalRaisedAcrossAllCampaigns(totalRaised);
+        dto.setActiveCampaigns(activeCampaigns);
+        dto.setSuccessfulCampaigns(successfulCampaigns); // This will be 0 until we build the auto-close logic
+        dto.setPendingWithdrawalRequests(pendingWithdrawals);
+
+        return dto;
+    }
 }
