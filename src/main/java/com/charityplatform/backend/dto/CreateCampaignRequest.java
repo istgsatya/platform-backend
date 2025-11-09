@@ -12,7 +12,7 @@ public class CreateCampaignRequest {
     private String description;
 
     @NotNull(message = "Goal amount is required.")
-    @DecimalMin(value = "1.00", message = "Goal amount must be at least 1.00.")
+    @DecimalMin(value = "0.0001", message = "Goal amount must be at least 0.0001(eth).")
     private BigDecimal goalAmount;
 
     public String getTitle() {

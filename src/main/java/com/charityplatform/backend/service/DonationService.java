@@ -1,27 +1,25 @@
 package com.charityplatform.backend.service;
 
-
 import com.charityplatform.backend.contracts.PlatformLedger;
-import com.charityplatform.backend.dto.CharityDashboardDTO;
 import com.charityplatform.backend.dto.CryptoDonationRequest;
-import com.charityplatform.backend.dto.DonationResponseDTO; // <-- New Import
+import com.charityplatform.backend.dto.DonationResponseDTO;
 import com.charityplatform.backend.dto.OnChainDonationInfo;
-import com.charityplatform.backend.model.*;
+import com.charityplatform.backend.model.Campaign;
+import com.charityplatform.backend.model.Donation;
+import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.repository.CampaignRepository;
 import com.charityplatform.backend.repository.DonationRepository;
-import com.charityplatform.backend.repository.WithdrawalRequestRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
-import org.springframework.security.access.AccessDeniedException;
+import org.web3j.utils.Convert; // <-- New Import
 
 import java.io.IOException;
-import java.math.BigDecimal;
-////import java.nio.file.AccessDeniedException;
+import java.math.BigDecimal; // <-- New Import
 import java.util.List;
-import java.util.stream.Collectors; // <-- New Import
+import java.util.stream.Collectors;
 
 @Service
 public class DonationService {
@@ -29,22 +27,21 @@ public class DonationService {
     private final PlatformLedger platformLedger;
     private final DonationRepository donationRepository;
     private final CampaignRepository campaignRepository;
-    private final WithdrawalRequestRepository withdrawalRequestRepository;
 
     @Autowired
-    public DonationService(Web3j web3j, PlatformLedger platformLedger, DonationRepository donationRepository, CampaignRepository campaignRepository, WithdrawalRequestRepository withdrawalRequestRepository) {
+    public DonationService(Web3j web3j, PlatformLedger platformLedger, DonationRepository donationRepository, CampaignRepository campaignRepository) {
         this.web3j = web3j;
         this.platformLedger = platformLedger;
         this.donationRepository = donationRepository;
         this.campaignRepository = campaignRepository;
-        this.withdrawalRequestRepository=withdrawalRequestRepository;;
     }
 
     @Transactional
-    public Donation verifyAndSaveCryptoDonation(CryptoDonationRequest request,User user){
+    public Donation verifyAndSaveCryptoDonation(CryptoDonationRequest request, User user){
         if(donationRepository.existsByTransactionHash(request.getTransactionHash())){
             throw new IllegalStateException("This transaction has already been processed.");
         }
+
         TransactionReceipt receipt;
         try {
             receipt = web3j.ethGetTransactionReceipt(request.getTransactionHash()).send().getTransactionReceipt()
@@ -52,60 +49,56 @@ public class DonationService {
         } catch (IOException e) {
             throw new RuntimeException("Failed to connect to blockchain node.", e);
         }
+
         List<PlatformLedger.DonationRecordedEventResponse> events = platformLedger.getDonationRecordedEvents(receipt);
         if (events.isEmpty()) {
             throw new IllegalStateException("No valid donation event found in this transaction.");
         }
-        PlatformLedger.DonationRecordedEventResponse event = events.get(0);
-        OnChainDonationInfo onChainInfo = new OnChainDonationInfo(event.campaignId, event.donor, event.amount);
 
-        if (onChainInfo.campaignId().longValue() != request.getCampaignId()) {
-            throw new IllegalStateException("On-chain campaign ID does not match request.");
-        }
-        Campaign campaign = campaignRepository.findById(request.getCampaignId())
-                .orElseThrow(() -> new RuntimeException("Campaign not found."));
+        PlatformLedger.DonationRecordedEventResponse event = events.get(0);
+
+        // --- START: THE FINAL, CORRECTED LOGIC ---
+
+        // 1. We get the Campaign ID DIRECTLY from the on-chain event. This is the source of truth.
+        Long onChainCampaignId = event.campaignId.longValue();
+
+        // 2. We use this trusted ID to find our campaign entity.
+        Campaign campaign = campaignRepository.findById(onChainCampaignId)
+                .orElseThrow(() -> new RuntimeException("Campaign with on-chain ID " + onChainCampaignId + " not found in our database."));
+
+        // 3. We also get the donation amount DIRECTLY from the on-chain event, not the client request.
+        BigDecimal onChainAmountInEth = Convert.fromWei(event.amount.toString(), Convert.Unit.ETHER);
+
+        // --- END: THE FINAL, CORRECTED LOGIC ---
 
         Donation donation = new Donation();
         donation.setUser(user);
         donation.setCampaign(campaign);
-        donation.setAmount(request.getAmount());
+        donation.setAmount(onChainAmountInEth); // Use the trusted, on-chain amount
         donation.setTransactionHash(request.getTransactionHash());
         donation.setPaymentMethod("CRYPTO");
 
-        // You should really update the campaign's currentAmount here
+        // Here we can finally update the stale database amount as a bonus
+        BigDecimal newTotal = campaign.getCurrentAmount().add(onChainAmountInEth);
+        campaign.setCurrentAmount(newTotal);
+        campaignRepository.save(campaign);
 
         return donationRepository.save(donation);
     }
 
-    // --- START: NEW HISTORY METHOD ---
     @Transactional(readOnly = true)
     public List<DonationResponseDTO> getDonationsForCurrentUser(User currentUser) {
-       List<Donation> donations = donationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
-
-        // Convert the list of entities to a list of safe DTOs.
+        List<Donation> donations = donationRepository.findByUserIdOrderByCreatedAtDesc(currentUser.getId());
         return donations.stream()
                 .map(DonationResponseDTO::fromDonation)
                 .collect(Collectors.toList());
     }
+
     @Transactional(readOnly = true)
-    public CharityDashboardDTO getCharityDashboardData(User currentUser) {
-        Charity charity = currentUser.getCharity();
-        if (charity == null) {
-            throw new AccessDeniedException("User is not associated with a charity.");
-        }
-        Long charityId = charity.getId();
-
-        BigDecimal totalRaised = donationRepository.sumTotalDonationsByCharityId(charityId);
-        long activeCampaigns = campaignRepository.countByCharityIdAndStatus(charityId, CampaignStatus.ACTIVE);
-        long successfulCampaigns = campaignRepository.countByCharityIdAndStatus(charityId, CampaignStatus.COMPLETED);
-        long pendingWithdrawals = withdrawalRequestRepository.countPendingByCharityId(charityId);
-
-        CharityDashboardDTO dto = new CharityDashboardDTO();
-        dto.setTotalRaisedAcrossAllCampaigns(totalRaised);
-        dto.setActiveCampaigns(activeCampaigns);
-        dto.setSuccessfulCampaigns(successfulCampaigns); // This will be 0 until we build the auto-close logic
-        dto.setPendingWithdrawalRequests(pendingWithdrawals);
-
-        return dto;
+    public List<DonationResponseDTO> getDonationsForCampaign(Long campaignId) {
+        List<Donation> donations = donationRepository.findByCampaignIdOrderByCreatedAtDesc(campaignId);
+        return donations.stream()
+                .map(DonationResponseDTO::fromDonation)
+                .collect(Collectors.toList());
     }
 }

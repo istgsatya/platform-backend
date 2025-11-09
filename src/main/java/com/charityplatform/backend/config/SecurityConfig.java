@@ -14,6 +14,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.util.Collections;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -37,20 +42,52 @@ public class SecurityConfig {
     }
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Collections.singletonList("*"));
+        configuration.setAllowedMethods(Collections.singletonList("*"));
+        configuration.setAllowedHeaders(Collections.singletonList("*"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        // --- Public Endpoints ---
+                        // Rule #1: Allow all static frontend assets.
+                        .requestMatchers(
+                                "/",
+                                "/index.html",
+                                "/_next/**",
+                                "/*.ico", "/*.png", "/*.svg", "/*.jpg",
+                                "/*.*.txt",
+                                "/404.html"
+                        ).permitAll()
+
+                        // Rule #2: Allow preflight OPTIONS requests.
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // Rule #3: Your existing public API endpoint rules.
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/charities/approved", "/api/charities/{id}/public").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/charities/approved",
+                                "/api/charities/{id}/public",
+                                "/api/charities/{id}/posts"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/campaigns",
+                                "/api/campaigns/{id}",
+                                "/api/campaigns/{id}/withdrawals",
+                                "/api/campaigns/{id}/balance",
+                                "/api/campaigns/{id}/donations" // <-- THE FINAL RULE
+                        ).permitAll()
 
-                        // --- THE FIX IS HERE ---
-                        // We need to add our new endpoints to the public list.
-                        .requestMatchers(HttpMethod.GET,"/api/campaigns","/api/campaigns/{id}", "/api/campaigns/{id}/withdrawals").permitAll()
-
-                        // All others require authentication.
+                        // Rule #4: All other requests must be authenticated.
                         .anyRequest().authenticated()
                 );
 

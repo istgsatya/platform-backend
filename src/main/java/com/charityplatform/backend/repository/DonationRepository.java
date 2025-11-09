@@ -28,5 +28,6 @@ public interface DonationRepository extends JpaRepository<Donation, Long> {
 
     @Query("SELECT COALESCE(SUM(d.amount), 0) FROM Donation d WHERE d.campaign.charity.id = :charityId")
     BigDecimal sumTotalDonationsByCharityId(@Param("charityId") Long charityId);
-
+    @EntityGraph(value = "Donation.withUserAndCampaign")
+    List<Donation> findByCampaignIdOrderByCreatedAtDesc(Long campaignId);
 }

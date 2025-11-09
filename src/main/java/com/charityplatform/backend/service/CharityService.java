@@ -6,6 +6,7 @@ import com.charityplatform.backend.model.*;
 import com.charityplatform.backend.repository.BlacklistedIdentifierRepository;
 import com.charityplatform.backend.repository.CharityRepository;
 import com.charityplatform.backend.repository.UserRepository;
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,7 @@ public class CharityService {
     private final CharityRepository charityRepository;
     private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
-    private final BlacklistedIdentifierRepository blacklistedIdentifierRepository; // <-- New Dependency
+    private final BlacklistedIdentifierRepository blacklistedIdentifierRepository;
 
     @Autowired
     public CharityService(CharityRepository charityRepository, UserRepository userRepository,
@@ -29,7 +30,7 @@ public class CharityService {
         this.charityRepository = charityRepository;
         this.userRepository = userRepository;
         this.fileStorageService = fileStorageService;
-        this.blacklistedIdentifierRepository = blacklistedIdentifierRepository; // <-- Initialize Dependency
+        this.blacklistedIdentifierRepository = blacklistedIdentifierRepository;
     }
 
     @Transactional
@@ -38,29 +39,27 @@ public class CharityService {
             throw new IllegalStateException("This user is already associated with a charity.");
         }
 
-        // --- START: THE NEW BLACKLIST WALL ---
-        // We will assume for the MVP that the document name is a unique identifier.
-        // In a real system, you'd use a hash of the document content.
         boolean isDocBlacklisted = blacklistedIdentifierRepository.existsByIdentifierValueAndIdentifierType(
                 document.getOriginalFilename(), IdentifierType.REGISTRATION_DOCUMENT_URL
         );
         if (isDocBlacklisted) {
             throw new AccessDeniedException("Your application contains information linked to a previously blacklisted entity. Fuck you and your fake charities.");
         }
-        // You could add checks for other fields from the request here too if they are meant to be unique.
-        // --- END: THE NEW BLACKLIST WALL ---
 
         String documentFileName = fileStorageService.storeFile(document);
 
         Charity charity = new Charity();
         charity.setName(request.getName());
         charity.setDescription(request.getDescription());
-        charity.setRegistrationDocumentUrl(documentFileName); // Saving the stored file name now
-        charity.setAdminUser(applicant);
+        charity.setRegistrationDocumentUrl(documentFileName);
+        charity.setPayoutWalletAddress(request.getPayoutWalletAddress());
+        // Note: The relationship is owned by the User, but we can set it here for JPA's benefit
+        // applicant.setCharity(charity); <-- this is a bidirectional ownership problem waiting to happen
 
         Charity savedCharity = charityRepository.save(charity);
 
         applicant.setCharity(savedCharity);
+        savedCharity.setAdminUser(applicant); // Ensure both sides are set before exiting transaction
         userRepository.save(applicant);
 
         return savedCharity;
@@ -105,14 +104,21 @@ public class CharityService {
         return charityRepository.save(charity);
     }
 
+    // --- START: THE FINAL FIX (LIST VERSION) ---
     @Transactional(readOnly = true)
     public List<CharityResponseDTO> getApprovedCharities() {
         List<Charity> charities = charityRepository.findByStatus(VerificationStatus.APPROVED);
+
+        // This is the Exorcism. Force the lazy proxy to load NOW.
+        charities.forEach(charity -> Hibernate.initialize(charity.getAdminUser()));
+
         return charities.stream()
                 .map(CharityResponseDTO::fromCharity)
                 .collect(Collectors.toList());
     }
+    // --- END: THE FINAL FIX (LIST VERSION) ---
 
+    // --- START: THE FINAL FIX (SINGLE VERSION) ---
     @Transactional(readOnly = true)
     public CharityResponseDTO getApprovedCharityById(Long id) {
         Charity charity = charityRepository.findById(id)
@@ -121,6 +127,11 @@ public class CharityService {
         if (charity.getStatus() != VerificationStatus.APPROVED) {
             throw new RuntimeException("Charity not found or not approved.");
         }
+
+        // This is the kill shot.
+        Hibernate.initialize(charity.getAdminUser());
+
         return CharityResponseDTO.fromCharity(charity);
     }
+    // --- END: THE FINAL FIX (SINGLE VERSION) ---
 }

@@ -1,78 +1,83 @@
 package com.charityplatform.backend.service;
-/// worst fucking sevice ever
-import com.charityplatform.backend.dto.CampaignResponseDTO;
+
+import com.charityplatform.backend.contracts.PlatformLedger;
+import com.charityplatform.backend.dto.CampaignBalanceDTO;
 import com.charityplatform.backend.dto.CreateCampaignRequest;
-import com.charityplatform.backend.model.*;
+import com.charityplatform.backend.model.Campaign;
+import com.charityplatform.backend.model.Charity;
+import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.repository.CampaignRepository;
-import com.charityplatform.backend.repository.UserRepository;
+import com.charityplatform.backend.repository.CharityRepository; // <-- MAY NEED TO INJECT
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 
 @Service
 public class CampaignService {
 
     private final CampaignRepository campaignRepository;
-    private final UserRepository userRepository;
+    private final PlatformLedger platformLedger;
+    private final CharityRepository charityRepository; // For re-fetching
 
     @Autowired
-    public CampaignService(CampaignRepository campaignRepository, UserRepository userRepository) {
+    public CampaignService(CampaignRepository campaignRepository, PlatformLedger platformLedger, CharityRepository charityRepository) {
         this.campaignRepository = campaignRepository;
-        this.userRepository = userRepository;
+        this.platformLedger = platformLedger;
+        this.charityRepository = charityRepository;
     }
 
-    /**
-     * Creates a new campaign for an authenticated charity admin.
-     * Re-fetches the user to ensure all associations are managed within the transaction.
-     * Converts the final saved entity to a DTO before returning to solve lazy loading on create.
-     */
     @Transactional
-    public CampaignResponseDTO createCampaign(CreateCampaignRequest request, User charityAdminPrincipal) {
-        // Re-fetch the user to get a managed entity within this transaction
-        User managedAdmin = userRepository.findById(charityAdminPrincipal.getId())
-                .orElseThrow(() -> new IllegalStateException("Authenticated user not found in database"));
-
-        Charity charity = managedAdmin.getCharity();
-
-        // Perform security and business logic checks
-        if (charity == null) {
-            throw new IllegalStateException("User is not associated with any charity.");
-        }
-        if (charity.getStatus() != VerificationStatus.APPROVED) {
-            throw new IllegalStateException("Charity is not approved to create campaigns.");
+    public Campaign createCampaign(CreateCampaignRequest request, User currentUser) {
+        // --- THIS IS THE FINAL EXORCISM ---
+        // Get the detached charity proxy from the current user.
+        Charity detachedCharity = currentUser.getCharity();
+        if (detachedCharity == null) {
+            throw new IllegalStateException("User is not a charity admin and cannot create a campaign.");
         }
 
-        // Create and save the new campaign
+        // RE-FETCH the charity from the database USING ITS ID. This gets us a live, "managed" entity.
+        Charity managedCharity = charityRepository.findById(detachedCharity.getId())
+                .orElseThrow(() -> new RuntimeException("Could not find the charity associated with the current user."));
+
         Campaign campaign = new Campaign();
         campaign.setTitle(request.getTitle());
         campaign.setDescription(request.getDescription());
         campaign.setGoalAmount(request.getGoalAmount());
-        campaign.setCharity(charity);
 
-        Campaign savedCampaign = campaignRepository.save(campaign);
+        // We now set the LIVE, MANAGED charity object, not the dead proxy.
+        campaign.setCharity(managedCharity);
 
-        // Return the DTO, converted safely inside the transaction
-        return CampaignResponseDTO.fromCampaign(savedCampaign);
+        return campaignRepository.save(campaign);
+        // --- END OF THE EXORCISM ---
     }
 
-    /**
-     * Fetches a list of all ACTIVE campaigns using an optimized JOIN FETCH query
-     * to prevent LazyInitializationException.
-     */
     @Transactional(readOnly = true)
     public List<Campaign> getActiveCampaigns() {
-        return campaignRepository.findByStatusWithCharity(CampaignStatus.ACTIVE);
+        List<Campaign> campaigns = campaignRepository.findByStatus(com.charityplatform.backend.model.CampaignStatus.ACTIVE);
+        // Defensively initialize to be safe for any downstream DTO conversions.
+        campaigns.forEach(campaign -> Hibernate.initialize(campaign.getCharity()));
+        return campaigns;
     }
 
-    /**
-     * Fetches a single campaign by its ID using an optimized JOIN FETCH query
-     * to prevent LazyInitializationException.
-     */
     @Transactional(readOnly = true)
     public Campaign getCampaignById(Long id) {
-        return campaignRepository.findByIdWithCharity(id)
+        Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found with id: " + id));
+        Hibernate.initialize(campaign.getCharity());
+        return campaign;
+    }
+
+    public CampaignBalanceDTO getCampaignBalance(Long campaignId) {
+        try {
+            BigInteger balanceInWei = platformLedger.campaignBalances(BigInteger.valueOf(campaignId)).send();
+            BigDecimal balanceInEth = new BigDecimal(balanceInWei).divide(new BigDecimal("1E18"));
+            return new CampaignBalanceDTO(balanceInEth);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch campaign balance from blockchain for campaign ID " + campaignId, e);
+        }
     }
 }

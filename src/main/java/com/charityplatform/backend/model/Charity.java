@@ -39,7 +39,8 @@ public class Charity {
 
     @Column
     private Instant rffCooldownUntil;
-
+    @Column(nullable = false, length = 42)
+    private String payoutWalletAddress;
     // --- START: NEW FIELD ---
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int validatedReportCount = 0;
@@ -114,7 +115,13 @@ public class Charity {
     public void setAdminUser(User adminUser) {
         this.adminUser = adminUser;
     }
+    public String getPayoutWalletAddress() {
+        return payoutWalletAddress;
+    }
 
+    public void setPayoutWalletAddress(String payoutWalletAddress) {
+        this.payoutWalletAddress = payoutWalletAddress;
+    }
     public Instant getUpdatedAt() {
         return updatedAt;
     }
