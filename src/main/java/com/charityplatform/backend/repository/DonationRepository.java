@@ -30,4 +30,8 @@ public interface DonationRepository extends JpaRepository<Donation, Long> {
     BigDecimal sumTotalDonationsByCharityId(@Param("charityId") Long charityId);
     @EntityGraph(value = "Donation.withUserAndCampaign")
     List<Donation> findByCampaignIdOrderByCreatedAtDesc(Long campaignId);
+
+    @Query("SELECT d FROM Donation d WHERE d.campaign.charity.id = :charityId ORDER BY d.createdAt DESC")
+    @EntityGraph(value = "Donation.withUserAndCampaign")
+    List<Donation> findByCharityIdOrderByCreatedAtDesc(@Param("charityId") Long charityId);
 }

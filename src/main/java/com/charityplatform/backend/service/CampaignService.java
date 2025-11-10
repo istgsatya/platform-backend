@@ -2,12 +2,13 @@ package com.charityplatform.backend.service;
 
 import com.charityplatform.backend.contracts.PlatformLedger;
 import com.charityplatform.backend.dto.CampaignBalanceDTO;
+import com.charityplatform.backend.dto.CampaignResponseDTO;
 import com.charityplatform.backend.dto.CreateCampaignRequest;
 import com.charityplatform.backend.model.Campaign;
 import com.charityplatform.backend.model.Charity;
 import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.repository.CampaignRepository;
-import com.charityplatform.backend.repository.CharityRepository; // <-- MAY NEED TO INJECT
+import com.charityplatform.backend.repository.CharityRepository;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -15,13 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class CampaignService {
 
     private final CampaignRepository campaignRepository;
     private final PlatformLedger platformLedger;
-    private final CharityRepository charityRepository; // For re-fetching
+    private final CharityRepository charityRepository;
 
     @Autowired
     public CampaignService(CampaignRepository campaignRepository, PlatformLedger platformLedger, CharityRepository charityRepository) {
@@ -30,44 +32,31 @@ public class CampaignService {
         this.charityRepository = charityRepository;
     }
 
+
     @Transactional
     public Campaign createCampaign(CreateCampaignRequest request, User currentUser) {
-        // --- THIS IS THE FINAL EXORCISM ---
-        // Get the detached charity proxy from the current user.
         Charity detachedCharity = currentUser.getCharity();
-        if (detachedCharity == null) {
-            throw new IllegalStateException("User is not a charity admin and cannot create a campaign.");
-        }
-
-        // RE-FETCH the charity from the database USING ITS ID. This gets us a live, "managed" entity.
+        if (detachedCharity == null) { throw new IllegalStateException("User is not a charity admin and cannot create a campaign."); }
         Charity managedCharity = charityRepository.findById(detachedCharity.getId())
                 .orElseThrow(() -> new RuntimeException("Could not find the charity associated with the current user."));
-
         Campaign campaign = new Campaign();
         campaign.setTitle(request.getTitle());
         campaign.setDescription(request.getDescription());
         campaign.setGoalAmount(request.getGoalAmount());
-
-        // We now set the LIVE, MANAGED charity object, not the dead proxy.
         campaign.setCharity(managedCharity);
-
         return campaignRepository.save(campaign);
-        // --- END OF THE EXORCISM ---
     }
 
     @Transactional(readOnly = true)
     public List<Campaign> getActiveCampaigns() {
-        List<Campaign> campaigns = campaignRepository.findByStatus(com.charityplatform.backend.model.CampaignStatus.ACTIVE);
-        // Defensively initialize to be safe for any downstream DTO conversions.
-        campaigns.forEach(campaign -> Hibernate.initialize(campaign.getCharity()));
+        List<Campaign> campaigns = campaignRepository.findByStatusWithCharity(com.charityplatform.backend.model.CampaignStatus.ACTIVE);
         return campaigns;
     }
 
     @Transactional(readOnly = true)
     public Campaign getCampaignById(Long id) {
-        Campaign campaign = campaignRepository.findById(id)
+        Campaign campaign = campaignRepository.findByIdWithCharity(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found with id: " + id));
-        Hibernate.initialize(campaign.getCharity());
         return campaign;
     }
 
@@ -80,4 +69,15 @@ public class CampaignService {
             throw new RuntimeException("Failed to fetch campaign balance from blockchain for campaign ID " + campaignId, e);
         }
     }
+
+
+    @Transactional(readOnly = true)
+    public List<CampaignResponseDTO> getCampaignsByCharity(Long charityId) {
+
+        List<Campaign> campaigns = campaignRepository.findByCharityIdOrderByCreatedAtDesc(charityId);
+        return campaigns.stream()
+                .map(CampaignResponseDTO::fromCampaign)
+                .collect(Collectors.toList());
+    }
+
 }

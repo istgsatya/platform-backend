@@ -2,9 +2,11 @@ package com.charityplatform.backend.service;
 
 import com.charityplatform.backend.dto.CharityApplicationRequest;
 import com.charityplatform.backend.dto.CharityResponseDTO;
+import com.charityplatform.backend.dto.DonationResponseDTO;
 import com.charityplatform.backend.model.*;
 import com.charityplatform.backend.repository.BlacklistedIdentifierRepository;
 import com.charityplatform.backend.repository.CharityRepository;
+import com.charityplatform.backend.repository.DonationRepository;
 import com.charityplatform.backend.repository.UserRepository;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,14 +25,16 @@ public class CharityService {
     private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
     private final BlacklistedIdentifierRepository blacklistedIdentifierRepository;
+    private final DonationRepository donationRepository;
 
     @Autowired
     public CharityService(CharityRepository charityRepository, UserRepository userRepository,
-                          FileStorageService fileStorageService, BlacklistedIdentifierRepository blacklistedIdentifierRepository) {
+                          FileStorageService fileStorageService, BlacklistedIdentifierRepository blacklistedIdentifierRepository,DonationRepository donationRepository) {
         this.charityRepository = charityRepository;
         this.userRepository = userRepository;
         this.fileStorageService = fileStorageService;
         this.blacklistedIdentifierRepository = blacklistedIdentifierRepository;
+        this.donationRepository = donationRepository;
     }
 
     @Transactional
@@ -53,8 +57,7 @@ public class CharityService {
         charity.setDescription(request.getDescription());
         charity.setRegistrationDocumentUrl(documentFileName);
         charity.setPayoutWalletAddress(request.getPayoutWalletAddress());
-        // Note: The relationship is owned by the User, but we can set it here for JPA's benefit
-        // applicant.setCharity(charity); <-- this is a bidirectional ownership problem waiting to happen
+
 
         Charity savedCharity = charityRepository.save(charity);
 
@@ -132,6 +135,21 @@ public class CharityService {
         Hibernate.initialize(charity.getAdminUser());
 
         return CharityResponseDTO.fromCharity(charity);
+    }
+    @Transactional(readOnly = true)
+    public List<DonationResponseDTO> getDonationsForMyCharity(User currentUser) {
+        Charity charity = currentUser.getCharity();
+        if (charity == null) {
+            throw new AccessDeniedException("The current user is not a charity admin.");
+        }
+
+        // Call the final, bulletproof repository method
+        List<Donation> donations = donationRepository.findByCharityIdOrderByCreatedAtDesc(charity.getId());
+
+        // Convert to DTOs
+        return donations.stream()
+                .map(DonationResponseDTO::fromDonation)
+                .collect(Collectors.toList());
     }
     // --- END: THE FINAL FIX (SINGLE VERSION) ---
 }
