@@ -78,16 +78,20 @@ public class SecurityConfig {
                                 "/api/charities/approved",
                                 "/api/charities/{id}/public",
                                 "/api/charities/{id}/posts"
+
+
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/campaigns",
                                 "/api/campaigns/{id}",
                                 "/api/campaigns/{id}/withdrawals",
                                 "/api/campaigns/{id}/balance",
-                                "/api/campaigns/{id}/donations" // <-- THE FINAL RULE
-                        ).permitAll()
+                                "/api/campaigns/{id}/donations"
 
-                        // Rule #4: All other requests must be authenticated.
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/donations/owner/{txHash}").permitAll()
+
+
                         .anyRequest().authenticated()
                 );
 

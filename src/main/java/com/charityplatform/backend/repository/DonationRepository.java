@@ -34,4 +34,9 @@ public interface DonationRepository extends JpaRepository<Donation, Long> {
     @Query("SELECT d FROM Donation d WHERE d.campaign.charity.id = :charityId ORDER BY d.createdAt DESC")
     @EntityGraph(value = "Donation.withUserAndCampaign")
     List<Donation> findByCharityIdOrderByCreatedAtDesc(@Param("charityId") Long charityId);
+
+    boolean existsByCampaignIdAndUserId(Long campaignId, Long userId);
+
+
+
 }

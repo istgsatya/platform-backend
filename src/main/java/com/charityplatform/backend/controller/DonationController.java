@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.List; // <-- New Import
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/donations")
@@ -28,17 +29,43 @@ public class DonationController {
     @PreAuthorize("hasAuthority('ROLE_DONOR') or hasAuthority('ROLE_CHARITY_ADMIN') or hasAuthority('ROLE_PLATFORM_ADMIN')")
     public ResponseEntity<DonationResponseDTO> verifyCryptoDonation(@Valid @RequestBody CryptoDonationRequest request,
                                                                     @AuthenticationPrincipal User currentUser) {
-        // Service now returns a Donation entity, which we convert to DTO
+
         Donation savedDonation = donationService.verifyAndSaveCryptoDonation(request, currentUser);
         return ResponseEntity.ok(DonationResponseDTO.fromDonation(savedDonation));
     }
 
-    // --- START: NEW HISTORY ENDPOINT ---
+
     @GetMapping("/me")
     @PreAuthorize("hasAuthority('ROLE_DONOR')")
     public ResponseEntity<List<DonationResponseDTO>> getCurrentUserDonations(@AuthenticationPrincipal User currentUser) {
         List<DonationResponseDTO> donations = donationService.getDonationsForCurrentUser(currentUser);
         return ResponseEntity.ok(donations);
     }
-    // --- END: NEW HISTORY ENDPOINT ---
+
+    @GetMapping("/has-donated/{campaignId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<?> hasDonated(@PathVariable Long campaignId, @AuthenticationPrincipal User currentUser) {
+        boolean hasDonated = donationService.hasUserDonatedToCampaign(campaignId, currentUser);
+
+
+        return ResponseEntity.ok(Map.of("hasDonated", hasDonated));
+    }
+
+
+
+    @GetMapping("/owner/{txHash}")
+    public ResponseEntity<?> getTransactionOwner(@PathVariable String txHash) {
+        try {
+            // This service method's only job is to get the owner from Etherscan.
+            String ownerAddress = donationService.getOwnerFromTransactionHash(txHash);
+
+            // We return ONLY that one thing, in a clean JSON object.
+            return ResponseEntity.ok(Map.of("ownerAddress", ownerAddress));
+        } catch (RuntimeException e) {
+            // If the hash is not found or Etherscan fails, return a 404 with the error.
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+
 }

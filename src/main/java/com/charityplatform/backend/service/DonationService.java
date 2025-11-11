@@ -9,9 +9,12 @@ import com.charityplatform.backend.model.Donation;
 import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.repository.CampaignRepository;
 import com.charityplatform.backend.repository.DonationRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.utils.Convert; // <-- New Import
@@ -27,13 +30,17 @@ public class DonationService {
     private final PlatformLedger platformLedger;
     private final DonationRepository donationRepository;
     private final CampaignRepository campaignRepository;
+    private final RestTemplate restTemplate;
+    @Value("${etherscan.api.key}")
+    private String etherscanApiKey;
 
     @Autowired
-    public DonationService(Web3j web3j, PlatformLedger platformLedger, DonationRepository donationRepository, CampaignRepository campaignRepository) {
+    public DonationService(Web3j web3j, PlatformLedger platformLedger, DonationRepository donationRepository, CampaignRepository campaignRepository,RestTemplate restTemplate) {
         this.web3j = web3j;
         this.platformLedger = platformLedger;
         this.donationRepository = donationRepository;
         this.campaignRepository = campaignRepository;
+        this.restTemplate = restTemplate;
     }
 
     @Transactional
@@ -57,7 +64,7 @@ public class DonationService {
 
         PlatformLedger.DonationRecordedEventResponse event = events.get(0);
 
-        // --- START: THE FINAL, CORRECTED LOGIC ---
+
 
         // 1. We get the Campaign ID DIRECTLY from the on-chain event. This is the source of truth.
         Long onChainCampaignId = event.campaignId.longValue();
@@ -74,11 +81,11 @@ public class DonationService {
         Donation donation = new Donation();
         donation.setUser(user);
         donation.setCampaign(campaign);
-        donation.setAmount(onChainAmountInEth); // Use the trusted, on-chain amount
+        donation.setAmount(onChainAmountInEth);
         donation.setTransactionHash(request.getTransactionHash());
         donation.setPaymentMethod("CRYPTO");
 
-        // Here we can finally update the stale database amount as a bonus
+
         BigDecimal newTotal = campaign.getCurrentAmount().add(onChainAmountInEth);
         campaign.setCurrentAmount(newTotal);
         campaignRepository.save(campaign);
@@ -100,5 +107,46 @@ public class DonationService {
         return donations.stream()
                 .map(DonationResponseDTO::fromDonation)
                 .collect(Collectors.toList());
+    }
+    @Transactional(readOnly = true)
+    public boolean hasUserDonatedToCampaign(Long campaignId, User currentUser) {
+        if (currentUser == null) return false;
+        return donationRepository.existsByCampaignIdAndUserId(campaignId, currentUser.getId());
+    }
+
+
+    public String getOwnerFromTransactionHash(String txHash) {
+
+        // The fixed URL now correctly uses the 'txHash' variable from the method argument.
+        // The chain ID, module, action, and API key remain hardcoded as you specified.
+        String url = String.format(
+                "https://api.etherscan.io/v2/api?chainid=11155111&module=proxy&action=eth_getTransactionReceipt&txhash=%s&apikey=6HH4RNGIHXMJ3G51V7HFKWSB9TQ9QA5DR6",
+              //  "https://api-sepolia.etherscan.io/api?module=proxy&action=eth_getTransactionReceipt&txhash=%s&apikey=6HH4RNGIHXMJ3G51V7HFKWSB9TQ9QA5DR6",
+                txHash
+        );
+
+        try {
+            JsonNode root = restTemplate.getForObject(url, JsonNode.class);
+
+            // All validation logic remains the same.
+            if (root == null || !root.has("result") || root.get("result").isNull()) {
+                throw new RuntimeException("Transaction receipt not found on Etherscan for hash: " + txHash);
+            }
+
+            JsonNode result = root.get("result");
+
+            if (!result.has("from") || result.get("from").isNull()) {
+                throw new RuntimeException("'from' address not found within the Etherscan transaction receipt response.");
+            }
+
+            if (!result.has("status") || !result.get("status").asText().equals("0x1")) {
+                throw new RuntimeException("Transaction was found, but its on-chain execution status is FAILED. Hash: " + txHash);
+            }
+
+            return result.get("from").asText();
+
+        } catch (Exception e) {
+            throw new RuntimeException("A critical error occurred while verifying the transaction with Etherscan: " + e.getMessage(), e);
+        }
     }
 }
