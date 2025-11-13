@@ -155,14 +155,14 @@ public class WithdrawalService {
         }
     }
 
-    // --- START: NEW V4 METHODS ---
+
     @Transactional
     public void appealForReview(Long withdrawalRequestId, User currentUser) {
         log.info("User {} is attempting to appeal request ID {}", currentUser.getUsername(), withdrawalRequestId);
         WithdrawalRequest request = withdrawalRequestRepository.findById(withdrawalRequestId)
                 .orElseThrow(() -> new RuntimeException("WithdrawalRequest not found with id: " + withdrawalRequestId));
 
-        // Security check: is the current user the admin of the charity that owns this campaign?
+
         Long charityAdminId = request.getCampaign().getCharity().getAdminUser().getId();
         if (!charityAdminId.equals(currentUser.getId())) {
             throw new AccessDeniedException("You are not the admin for the charity that created this request.");
@@ -181,7 +181,7 @@ public class WithdrawalService {
             throw new IllegalStateException("You cannot appeal this request yet. Please wait until " + appealAvailableTime);
         }
 
-        // All checks passed, update the local status
+
         request.setStatus(RequestStatus.AWAITING_ADMIN_DECISION);
         withdrawalRequestRepository.save(request);
         log.info("Request {} successfully appealed by {}. Status updated to AWAITING_ADMIN_DECISION.", withdrawalRequestId, currentUser.getUsername());
@@ -237,13 +237,21 @@ public class WithdrawalService {
     }
     @Transactional(readOnly = true)
     public List<WithdrawalResponseDTO> getWithdrawalsForCampaign(Long campaignId) {
-        // Use our new @EntityGraph-powered repository method.
+
         List<WithdrawalRequest> requests = withdrawalRequestRepository.findByCampaignIdOrderByCreatedAtDesc(campaignId);
 
-        // Convert to DTOs while the session is still open.
+
         return requests.stream()
                 .map(WithdrawalResponseDTO::fromEntity)
                 .collect(Collectors.toList());
+    }
+    @Transactional(readOnly = true)
+    public long getVoteCountForRequest(Long withdrawalRequestId) {
+
+        if (!withdrawalRequestRepository.existsById(withdrawalRequestId)) {
+            throw new RuntimeException("WithdrawalRequest not found with id: " + withdrawalRequestId);
+        }
+        return voteRepository.countDistinctVotersByRequestId(withdrawalRequestId);
     }
 
 }
