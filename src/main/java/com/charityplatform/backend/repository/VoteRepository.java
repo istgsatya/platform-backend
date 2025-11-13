@@ -9,5 +9,14 @@ public interface VoteRepository extends JpaRepository<Vote, Long> {
 
     @Query("SELECT COUNT(DISTINCT v.voter.id) FROM Vote v WHERE v.withdrawalRequest.id = :requestId")
     long countDistinctVotersByRequestId(@Param("requestId") Long requestId);
+
+
+
     long countByVoterId(Long userId);
+    boolean existsByTransactionHash(String transactionHash);
+
+    boolean existsByVoterIdAndWithdrawalRequestId(Long voterId, Long withdrawalRequestId);
+
+
+
 }

@@ -56,7 +56,7 @@ public class DonationController {
     @GetMapping("/owner/{txHash}")
     public ResponseEntity<?> getTransactionOwner(@PathVariable String txHash) {
         try {
-            // This service method's only job is to get the owner from Etherscan.
+
             String ownerAddress = donationService.getOwnerFromTransactionHash(txHash);
 
             // We return ONLY that one thing, in a clean JSON object.

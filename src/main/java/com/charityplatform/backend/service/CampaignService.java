@@ -9,7 +9,7 @@ import com.charityplatform.backend.model.Charity;
 import com.charityplatform.backend.model.User;
 import com.charityplatform.backend.repository.CampaignRepository;
 import com.charityplatform.backend.repository.CharityRepository;
-import org.hibernate.Hibernate;
+import com.charityplatform.backend.repository.WithdrawalRequestRepository; // <-- 1. NEW IMPORT
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,12 +24,15 @@ public class CampaignService {
     private final CampaignRepository campaignRepository;
     private final PlatformLedger platformLedger;
     private final CharityRepository charityRepository;
+    private final WithdrawalRequestRepository withdrawalRequestRepository; // <-- 2. NEW REPOSITORY
 
     @Autowired
-    public CampaignService(CampaignRepository campaignRepository, PlatformLedger platformLedger, CharityRepository charityRepository) {
+    public CampaignService(CampaignRepository campaignRepository, PlatformLedger platformLedger,
+                           CharityRepository charityRepository, WithdrawalRequestRepository withdrawalRequestRepository) { // <-- 3. CONSTRUCTOR UPDATED
         this.campaignRepository = campaignRepository;
         this.platformLedger = platformLedger;
         this.charityRepository = charityRepository;
+        this.withdrawalRequestRepository = withdrawalRequestRepository; // <-- 3. CONSTRUCTOR UPDATED
     }
 
 
@@ -53,11 +56,30 @@ public class CampaignService {
         return campaigns;
     }
 
+
     @Transactional(readOnly = true)
     public Campaign getCampaignById(Long id) {
         Campaign campaign = campaignRepository.findByIdWithCharity(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found with id: " + id));
         return campaign;
+    }
+
+    // --- 4. THIS IS THE NEW METHOD TO USE FOR YOUR CAMPAIGN DETAIL PAGE ---
+    @Transactional(readOnly = true)
+    public CampaignResponseDTO getCampaignDetailsById(Long id) {
+        Campaign campaign = campaignRepository.findByIdWithCharity(id)
+                .orElseThrow(() -> new RuntimeException("Campaign not found with id: " + id));
+
+        // Create the DTO from the entity
+        CampaignResponseDTO dto = CampaignResponseDTO.fromCampaign(campaign);
+
+        // Calculate total withdrawn amount
+        BigDecimal totalWithdrawn = withdrawalRequestRepository.findTotalWithdrawnByCampaignId(id);
+
+        // Set the value, defaulting to zero if null
+        dto.setTotalWithdrawn(totalWithdrawn != null ? totalWithdrawn : BigDecimal.ZERO);
+
+        return dto;
     }
 
     public CampaignBalanceDTO getCampaignBalance(Long campaignId) {

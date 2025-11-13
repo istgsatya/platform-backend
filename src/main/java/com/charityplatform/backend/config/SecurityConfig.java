@@ -84,12 +84,10 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/campaigns", "/api/campaigns/{id}", "/api/campaigns/{id}/withdrawals",
-                                "/api/campaigns/{id}/balance", "/api/campaigns/{id}/donations"
+                                "/api/campaigns/{id}/balance", "/api/campaigns/{id}/donations","/api/withdrawals/{id}/votecount"
                         ).permitAll()
 
-                        // Note: The /owner and /votecount endpoints do not need to be public
-                        // if the eligibility check happens after login. @PreAuthorize is enough.
-                        // For maximum safety, we only whitelist what absolutely MUST be public.
+
 
                         .anyRequest().authenticated()
                 );

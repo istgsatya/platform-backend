@@ -15,8 +15,8 @@ public class CampaignResponseDTO {
     private String charityName;
     private Long charityId;
     private Instant createdAt;
+    private BigDecimal totalWithdrawn; // <-- ADD THIS FIELD
 
-    // Static factory method for easy conversion
     public static CampaignResponseDTO fromCampaign(Campaign campaign) {
         CampaignResponseDTO dto = new CampaignResponseDTO();
         dto.setId(campaign.getId());
@@ -26,7 +26,6 @@ public class CampaignResponseDTO {
         dto.setCurrentAmount(campaign.getCurrentAmount());
         dto.setCreatedAt(campaign.getCreatedAt());
 
-        // This is the key part that triggers the lazy loading safely
         if (campaign.getCharity() != null) {
             dto.setCharityName(campaign.getCharity().getName());
             dto.setCharityId(campaign.getCharity().getId());
@@ -35,7 +34,7 @@ public class CampaignResponseDTO {
         return dto;
     }
 
-    // --- Getters and Setters ---
+    // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getTitle() { return title; }
@@ -52,4 +51,9 @@ public class CampaignResponseDTO {
     public void setCharityId(Long charityId) { this.charityId = charityId; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    // --- ADD THESE GETTER AND SETTER ---
+    public BigDecimal getTotalWithdrawn() { return totalWithdrawn; }
+    public void setTotalWithdrawn(BigDecimal totalWithdrawn) { this.totalWithdrawn = totalWithdrawn; }
+    // ------------------------------------
 }

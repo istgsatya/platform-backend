@@ -22,6 +22,9 @@ public class Vote {
     @Column(nullable = false)
     private boolean approved;
 
+    @Column(nullable = true, unique = true) // Set to true if you want to ensure no duplicate hashes are ever saved
+    private String transactionHash;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -64,6 +67,14 @@ public class Vote {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getTransactionHash() {
+        return transactionHash;
+    }
+
+    public void setTransactionHash(String transactionHash) {
+        this.transactionHash = transactionHash;
     }
 
     public void setCreatedAt(Instant createdAt) {
