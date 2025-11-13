@@ -37,6 +37,9 @@ public interface DonationRepository extends JpaRepository<Donation, Long> {
 
     boolean existsByCampaignIdAndUserId(Long campaignId, Long userId);
 
+    @Query("SELECT SUM(d.amount) FROM Donation d WHERE d.campaign.id = :campaignId")
+    BigDecimal getTotalDonationAmountForCampaign(Long campaignId);
+
 
 
 }

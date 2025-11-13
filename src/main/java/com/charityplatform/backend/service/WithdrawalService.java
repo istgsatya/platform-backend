@@ -7,6 +7,12 @@ import com.charityplatform.backend.model.*;
 import com.charityplatform.backend.repository.*; // Changed to wildcard import
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+
+import com.charityplatform.backend.repository.DonationRepository;
+import java.math.RoundingMode;
+
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -34,18 +40,22 @@ public class WithdrawalService {
     private final UserRepository userRepository;
     private final VoteRepository voteRepository;
     private final CharityRepository charityRepository; // <-- New Dependency
+    private final DonationRepository donationRepository; // <-- Add this field
+
 
     @Autowired
     public WithdrawalService(PlatformLedger platformLedger, CampaignRepository campaignRepository,
                              WithdrawalRequestRepository withdrawalRequestRepository, FileStorageService fileStorageService,
-                             UserRepository userRepository, VoteRepository voteRepository, CharityRepository charityRepository) { // <-- Add to Constructor
+                             UserRepository userRepository, VoteRepository voteRepository, CharityRepository charityRepository,DonationRepository donationRepository) {
         this.platformLedger = platformLedger;
         this.campaignRepository = campaignRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
         this.fileStorageService = fileStorageService;
         this.userRepository = userRepository;
         this.voteRepository = voteRepository;
-        this.charityRepository = charityRepository; // <-- Initialize Dependency
+        this.charityRepository = charityRepository;
+
+        this.donationRepository = donationRepository;
     }
 
     @Transactional
@@ -59,12 +69,12 @@ public class WithdrawalService {
             throw new IllegalStateException("User is not the designated admin for a charity.");
         }
 
-        // --- START: NEW COOLDOWN PENALTY CHECK ---
+
         if (charity.getRffCooldownUntil() != null && Instant.now().isBefore(charity.getRffCooldownUntil())) {
             log.warn("Charity '{}' (ID: {}) tried to create an RFF while on cooldown.", charity.getName(), charity.getId());
             throw new AccessDeniedException("This charity is on a 24-hour cooldown from creating new funding requests due to a recently rejected appeal. Cooldown ends at: " + charity.getRffCooldownUntil());
         }
-        // --- END: NEW COOLDOWN PENALTY CHECK ---
+
 
         Campaign campaign = campaignRepository.findById(request.getCampaignId())
                 .orElseThrow(() -> new RuntimeException("Campaign not found with id: " + request.getCampaignId()));
@@ -105,7 +115,7 @@ public class WithdrawalService {
 
     @Transactional
     public void voteOnRequest(Long withdrawalRequestId, boolean approve, User currentUser) throws Exception {
-        // ... This method remains unchanged ...
+
         User voter = userRepository.findById(currentUser.getId()).orElseThrow(() -> new IllegalStateException("Authenticated user not found in database."));
         WithdrawalRequest request = withdrawalRequestRepository.findById(withdrawalRequestId).orElseThrow(() -> new RuntimeException("WithdrawalRequest not found with id: " + withdrawalRequestId));
         if (voter.getWallets().isEmpty()) { throw new IllegalStateException("User does not have a wallet registered."); }
@@ -128,30 +138,55 @@ public class WithdrawalService {
         log.info("Vote cast successfully. Now checking if execution threshold is met for request {}", onChainRequestId);
         checkAndTriggerEarlyExecution(request);
     }
-
     private void checkAndTriggerEarlyExecution(WithdrawalRequest request) {
-        // ... This method remains unchanged ...
         try {
-            Tuple12<BigInteger, String, String, BigInteger, String, String, String, BigInteger, BigInteger, BigInteger, BigInteger, BigInteger> onChainRequest = platformLedger.withdrawalRequests(BigInteger.valueOf(request.getOnChainRequestId())).send();
-            BigInteger votesFor = onChainRequest.getValue11();
-            BigInteger votesAgainst = onChainRequest.getValue12();
-            BigInteger totalVotes = votesFor.add(votesAgainst);
-            if (totalVotes.equals(BigInteger.ZERO)) { log.info("No votes tallied yet, cannot execute."); return; }
-            BigInteger approvalPercentage = votesFor.multiply(BigInteger.valueOf(100)).divide(totalVotes);
-            log.info("Request {} vote tally: {}% FOR ({}) / {}% AGAINST ({}).", request.getOnChainRequestId(), approvalPercentage, votesFor, BigInteger.valueOf(100).subtract(approvalPercentage), votesAgainst);
-            if (approvalPercentage.intValue() > 60) {
-                log.warn("VOTE THRESHOLD MET ({}%)! Attempting to trigger early execution for request {}.", approvalPercentage, request.getOnChainRequestId());
-                TransactionReceipt executionReceipt = platformLedger.triggerEarlyExecution(BigInteger.valueOf(request.getOnChainRequestId())).send();
+            Tuple12<BigInteger, String, String, BigInteger, String, String, String, BigInteger, BigInteger, BigInteger, BigInteger, BigInteger> onChainRequest =
+                    platformLedger.withdrawalRequests(BigInteger.valueOf(request.getOnChainRequestId())).send();
+
+            BigInteger onChainStatus = onChainRequest.component10();
+            if (onChainStatus.intValue() != 0) {
+                log.info("Request {} is no longer pending on-chain. Skipping execution check.", request.getOnChainRequestId());
+                return;
+            }
+
+            BigInteger votesForInWei = onChainRequest.component11();
+            Long campaignId = request.getCampaign().getId();
+            BigDecimal totalDonationPowerInETH = donationRepository.getTotalDonationAmountForCampaign(campaignId);
+
+            if (totalDonationPowerInETH == null || totalDonationPowerInETH.compareTo(BigDecimal.ZERO) == 0) {
+                log.warn("Campaign {} has no donation power recorded in the database. Cannot calculate threshold.", campaignId);
+                return;
+            }
+
+            BigDecimal weiPerEth = new BigDecimal("1000000000000000000");
+            BigDecimal totalDonationPowerInWei = totalDonationPowerInETH.multiply(weiPerEth);
+
+            BigDecimal votesForDecimal = new BigDecimal(votesForInWei);
+            BigDecimal sixtyPercentThreshold = new BigDecimal("60");
+            BigDecimal actualApprovalPercentage = votesForDecimal.multiply(new BigDecimal(100))
+                    .divide(totalDonationPowerInWei, 2, RoundingMode.HALF_UP);
+
+            log.info("CORRECT VOTE TALLY for Request {}: {}% FOR ({}) / {} total power.",
+                    request.getOnChainRequestId(), actualApprovalPercentage, votesForInWei, totalDonationPowerInWei);
+
+            if (actualApprovalPercentage.compareTo(sixtyPercentThreshold) > 0) {
+                log.warn("CORRECT VOTE THRESHOLD MET ({}%)! Attempting to execute via admin function for request {}.",
+                        actualApprovalPercentage, request.getOnChainRequestId());
+
+                TransactionReceipt executionReceipt = platformLedger.forceExecuteByAdmin(BigInteger.valueOf(request.getOnChainRequestId())).send();
+
                 if (executionReceipt.isStatusOK()) {
-                    log.info("SUCCESS: Early execution transaction confirmed for request {}", request.getOnChainRequestId());
+                    log.info("SUCCESS: Admin-forced execution transaction confirmed for request {}", request.getOnChainRequestId());
                     request.setStatus(RequestStatus.EXECUTED);
                     withdrawalRequestRepository.save(request);
                 } else {
-                    log.error("Execution transaction failed for request {}. Status: {}", request.getOnChainRequestId(), executionReceipt.getStatus());
+                    log.error("Execution transaction FAILED for request {}. On-chain status: {}",
+                            request.getOnChainRequestId(), executionReceipt.getStatus());
                 }
             }
         } catch (Exception e) {
-            log.error("An error occurred during the check/trigger early execution phase for request {}. This does not affect the vote itself. Error: {}", request.getOnChainRequestId(), e.getMessage());
+            log.error("CRITICAL: An error occurred during the 'Backend Adjudicator' check for request {}. The user's vote was saved, but execution failed. Error: {}",
+                    request.getOnChainRequestId(), e.getMessage());
         }
     }
 
@@ -254,4 +289,28 @@ public class WithdrawalService {
         return voteRepository.countDistinctVotersByRequestId(withdrawalRequestId);
     }
 
+
+
+    // This new method allows an admin to kickstart the check for a stuck request.
+    @Transactional
+    public void manuallyTriggerExecution(Long withdrawalRequestId) {
+        WithdrawalRequest request = withdrawalRequestRepository.findById(withdrawalRequestId)
+                .orElseThrow(() -> new RuntimeException("WithdrawalRequest not found with id: " + withdrawalRequestId));
+
+        log.info("Found request {}. Calling checkAndTriggerEarlyExecution logic.", withdrawalRequestId);
+        // This calls the exact same, newly-fixed method.
+        checkAndTriggerEarlyExecution(request);
+    }
+    @Transactional(readOnly = true)
+    public boolean checkIfUserHasVoted(Long withdrawalRequestId, User currentUser) throws Exception {
+        if (currentUser == null || currentUser.getWallets().isEmpty()) {
+            return false; // User not logged in or has no wallet
+        }
+        String userWallet = currentUser.getWallets().get(0).getAddress();
+        WithdrawalRequest request = withdrawalRequestRepository.findById(withdrawalRequestId)
+                .orElseThrow(() -> new RuntimeException("Request not found"));
+
+        // Query the blockchain directly for the most accurate answer
+        return platformLedger.hasVoted(BigInteger.valueOf(request.getOnChainRequestId()), userWallet).send();
+    }
 }

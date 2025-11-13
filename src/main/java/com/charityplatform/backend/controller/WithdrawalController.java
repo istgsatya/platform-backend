@@ -18,9 +18,21 @@ import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Map;
 
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestController
 @RequestMapping("/api/withdrawals")
+
 public class WithdrawalController {
+
+
+
+    private static final Logger log = LoggerFactory.getLogger(WithdrawalController.class);
+
+
+    
 
     private final WithdrawalService withdrawalService;
 
@@ -85,4 +97,36 @@ public class WithdrawalController {
         long count = withdrawalService.getVoteCountForRequest(id);
         return ResponseEntity.ok(Map.of("voteCount", count));
     }
+    @PostMapping("/{id}/manual-trigger")
+    @PreAuthorize("hasAuthority('ROLE_PLATFORM_ADMIN')")
+    public ResponseEntity<?> manuallyTriggerExecutionCheck(
+            @PathVariable("id") Long withdrawalRequestId,
+            @AuthenticationPrincipal User currentUser) {
+        try {
+            log.warn("ADMIN {} is manually triggering an execution check for request {}", currentUser.getUsername(), withdrawalRequestId);
+            withdrawalService.manuallyTriggerExecution(withdrawalRequestId);
+            return ResponseEntity.ok(new MessageResponse(true, "Manual execution check triggered successfully. Check logs for outcome."));
+        } catch (Exception e) {
+            return new ResponseEntity<>(new MessageResponse(false, "An error occurred: " + e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+
+
+    @GetMapping("/{id}/has-voted")
+    @PreAuthorize("hasAuthority('ROLE_DONOR')")
+    public ResponseEntity<?> hasUserVoted(
+            @PathVariable("id") Long withdrawalRequestId,
+            @AuthenticationPrincipal User currentUser) {
+        try {
+            boolean hasVoted = withdrawalService.checkIfUserHasVoted(withdrawalRequestId, currentUser);
+            return ResponseEntity.ok(Map.of("hasVoted", hasVoted));
+        } catch (Exception e) {
+            // Return false if any error occurs, preventing a locked UI on a failed check
+            return ResponseEntity.ok(Map.of("hasVoted", false));
+        }
+    }
+
+
+
 }
