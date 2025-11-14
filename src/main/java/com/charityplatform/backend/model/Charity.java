@@ -1,5 +1,9 @@
 package com.charityplatform.backend.model;
 
+
+
+import jakarta.persistence.Column;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;

@@ -40,11 +40,15 @@ public class WithdrawalService {
     private final DonationRepository donationRepository;
     private final RestTemplate restTemplate;
 
+    private final IpfsService ipfsService;
+
+
+
     @Autowired
     public WithdrawalService(PlatformLedger platformLedger, CampaignRepository campaignRepository,
                              WithdrawalRequestRepository withdrawalRequestRepository, FileStorageService fileStorageService,
                              UserRepository userRepository, VoteRepository voteRepository, CharityRepository charityRepository,
-                             DonationRepository donationRepository, RestTemplate restTemplate) {
+                             DonationRepository donationRepository, RestTemplate restTemplate,IpfsService ipfsService) {
         this.platformLedger = platformLedger;
         this.campaignRepository = campaignRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
@@ -54,6 +58,7 @@ public class WithdrawalService {
         this.charityRepository = charityRepository;
         this.donationRepository = donationRepository;
         this.restTemplate = restTemplate;
+        this.ipfsService = ipfsService;
     }
 
     @Transactional
@@ -152,14 +157,15 @@ public class WithdrawalService {
             }
         }
     }
-
     @Transactional
-    public WithdrawalRequest createRff(CreateWithdrawalRequest request, MultipartFile financialProof, MultipartFile visualProof, User charityAdminPrincipal) {
+    public WithdrawalRequest createRff(CreateWithdrawalRequest request, MultipartFile financialProof,
+                                       MultipartFile visualProof, User charityAdminPrincipal) {
+
         User managedCharityAdmin = userRepository.findById(charityAdminPrincipal.getId())
-                .orElseThrow(() -> new IllegalStateException("Authenticated user not found."));
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found in database."));
         Charity charity = managedCharityAdmin.getCharity();
         if (charity == null || !charity.getAdminUser().getId().equals(managedCharityAdmin.getId())) {
-            throw new IllegalStateException("User is not the admin for a charity.");
+            throw new IllegalStateException("User is not the designated admin for a charity.");
         }
         if (charity.getRffCooldownUntil() != null && Instant.now().isBefore(charity.getRffCooldownUntil())) {
             throw new AccessDeniedException("This charity is on a 24-hour cooldown.");
@@ -169,30 +175,61 @@ public class WithdrawalService {
         if (!campaign.getCharity().getId().equals(charity.getId())) {
             throw new AccessDeniedException("You do not have permission to create this request.");
         }
-        String financialProofUrl = fileStorageService.storeFile(financialProof);
-        String visualProofUrl = fileStorageService.storeFile(visualProof);
+
+        String financialProofCid = null;
+        String visualProofCid = null;
+
         try {
+            log.info("IPFS_INTEGRATION: Uploading financial proof to IPFS via Pinata...");
+            financialProofCid = ipfsService.uploadFile(financialProof);
+
+            log.info("IPFS_INTEGRATION: Uploading visual proof to IPFS via Pinata...");
+            visualProofCid = ipfsService.uploadFile(visualProof);
+
             BigInteger amountInWei = request.getAmount().multiply(new BigDecimal("1000000000000000000")).toBigInteger();
-            TransactionReceipt receipt = platformLedger.createWithdrawalRequest(BigInteger.valueOf(campaign.getId()), request.getVendorAddress(), amountInWei, request.getPurpose(), financialProofUrl, visualProofUrl).send();
-            if (!receipt.isStatusOK()) { throw new RuntimeException("Blockchain transaction failed."); }
+
+            log.info("IPFS_INTEGRATION: Sending on-chain transaction with IPFS CIDs: [Financial: {}, Visual: {}]", financialProofCid, visualProofCid);
+            TransactionReceipt receipt = platformLedger.createWithdrawalRequest(
+                    BigInteger.valueOf(campaign.getId()),
+                    request.getVendorAddress(),
+                    amountInWei,
+                    request.getPurpose(),
+                    financialProofCid, // Using the immutable IPFS hash
+                    visualProofCid    // Using the immutable IPFS hash
+            ).send();
+
+            if (!receipt.isStatusOK()) {
+                throw new RuntimeException("Blockchain transaction failed with status: " + receipt.getStatus());
+            }
             List<PlatformLedger.WithdrawalRequestCreatedEventResponse> events = platformLedger.getWithdrawalRequestCreatedEvents(receipt);
-            if (events.isEmpty()) { throw new RuntimeException("Transaction failed to emit event."); }
+            if (events.isEmpty()) {
+                throw new RuntimeException("Transaction succeeded but failed to emit the expected on-chain event.");
+            }
+
             BigInteger onChainId = events.get(0).requestId;
             BigInteger onChainDeadline = events.get(0).votingDeadline;
+
             WithdrawalRequest rff = new WithdrawalRequest();
             rff.setOnChainRequestId(onChainId.longValue());
             rff.setCampaign(campaign);
             rff.setAmount(request.getAmount());
             rff.setPurpose(request.getPurpose());
             rff.setVendorAddress(request.getVendorAddress());
-            rff.setFinancialProofUrl(financialProofUrl);
-            rff.setVisualProofUrl(visualProofUrl);
+            rff.setFinancialProofUrl(financialProofCid); // Saving the IPFS hash to the database
+            rff.setVisualProofUrl(visualProofCid);     // Saving the IPFS hash to the database
             rff.setVotingDeadline(Instant.ofEpochSecond(onChainDeadline.longValue()));
+
+            log.info("IPFS_INTEGRATION: Successfully created on-chain request {} and saving to database.", onChainId);
             return withdrawalRequestRepository.save(rff);
+
         } catch (Exception e) {
-            fileStorageService.deleteFile(financialProofUrl);
-            fileStorageService.deleteFile(visualProofUrl);
-            throw new RuntimeException("Failed to create on-chain request: " + e.getMessage(), e);
+            log.error("CRITICAL: Failed during RFF creation with IPFS. Error: {}", e.getMessage(), e);
+
+            // Note: In a production system, you would add logic here to call a "delete" or "unpin" endpoint on Pinata
+            // for financialProofCid and visualProofCid if they are not null, to avoid orphaned files.
+            // For the hackathon, this manual cleanup step is acceptable.
+
+            throw new RuntimeException("Failed to create the withdrawal request with IPFS proofs: " + e.getMessage(), e);
         }
     }
 
