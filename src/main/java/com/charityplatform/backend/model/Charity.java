@@ -53,6 +53,9 @@ public class Charity {
     @OneToOne(mappedBy ="charity")
     private User adminUser;
 
+    @Column(name = "banner_image_url")
+    private String bannerImageUrl;
+
     @PrePersist
     protected void onCreate() {
         createdAt = Instant.now();
@@ -121,6 +124,14 @@ public class Charity {
     }
     public String getPayoutWalletAddress() {
         return payoutWalletAddress;
+    }
+
+    public String getBannerImageUrl() {
+        return bannerImageUrl;
+    }
+
+    public void setBannerImageUrl(String bannerImageUrl) {
+        this.bannerImageUrl = bannerImageUrl;
     }
 
     public void setPayoutWalletAddress(String payoutWalletAddress) {

@@ -3,6 +3,7 @@ package com.charityplatform.backend.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.hibernate.validator.constraints.Length;
+import org.hibernate.validator.constraints.URL; // Import for URL validation
 
 public class CharityApplicationRequest {
 
@@ -14,11 +15,18 @@ public class CharityApplicationRequest {
     @Size(min = 50, message = "Description must be at least 50 characters long.")
     private String description;
 
-    // --- START: NEW FIELD ---
     @NotBlank(message = "Payout wallet address is required.")
     @Length(min = 42, max = 42, message = "Wallet address must be 42 characters long.")
     private String payoutWalletAddress;
+
+    // --- NEW FIELD FOR THE BANNER ---
+    @NotBlank(message = "Banner Image IPFS Link is required.")
+    @Size(min = 46, max = 59, message = "A valid IPFS CID is typically between 46 and 59 characters.")
+    private String bannerImageUrl;
     // --- END: NEW FIELD ---
+
+
+    // --- Getters and Setters ---
 
     public String getName() {
         return name;
@@ -36,13 +44,21 @@ public class CharityApplicationRequest {
         this.description = description;
     }
 
-    // --- START: NEW GETTER/SETTER ---
     public String getPayoutWalletAddress() {
         return payoutWalletAddress;
     }
 
     public void setPayoutWalletAddress(String payoutWalletAddress) {
         this.payoutWalletAddress = payoutWalletAddress;
+    }
+
+    // --- NEW GETTER/SETTER FOR THE BANNER ---
+    public String getBannerImageUrl() {
+        return bannerImageUrl;
+    }
+
+    public void setBannerImageUrl(String bannerImageUrl) {
+        this.bannerImageUrl = bannerImageUrl;
     }
     // --- END: NEW GETTER/SETTER ---
 }
