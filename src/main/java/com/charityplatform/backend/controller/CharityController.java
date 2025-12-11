@@ -54,7 +54,7 @@ public class CharityController {
         }
     }
 
-    // --- ALL OTHER METHODS REMAIN UNCHANGED ---
+
 
     @GetMapping("/approved")
     public ResponseEntity<List<CharityResponseDTO>> getApprovedCharities() {
