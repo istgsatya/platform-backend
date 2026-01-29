@@ -113,7 +113,7 @@ public class CharityService {
         if (user != null) {
             Set<Role> roles = user.getRoles();
             roles.remove(Role.ROLE_DONOR);
-//            roles.add(Role.ROLE_CHARITY_ADMIN);
+            roles.add(Role.ROLE_CHARITY_ADMIN);
             user.setRoles(roles);
             userRepository.save(user);
         }
