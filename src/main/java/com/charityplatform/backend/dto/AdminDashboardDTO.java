@@ -14,7 +14,7 @@ public class AdminDashboardDTO {
    
     public long getTotalUsers() { return totalUsers; }
     public void setTotalUsers(long totalUsers) { this.totalUsers = totalUsers; }
-    public long getTotalCharities() { return totalCharities; }
+    public long getz3otalCharities() { return totalCharities; }
     public void setTotalCharities(long totalCharities) { this.totalCharities = totalCharities; }
     public long getTotalCampaigns() { return totalCampaigns; }
     public void setTotalCampaigns(long totalCampaigns) { this.totalCampaigns = totalCampaigns; }
